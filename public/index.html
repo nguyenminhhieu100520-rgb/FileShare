@@ -397,26 +397,22 @@
 <!-- ✅ Fix 3: Load config từ server thay vì hardcode -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-// ─── Constants ────────────────────────────────────────────────
-// ✅ Fix 1: Chunk size 64KB để truyền file lớn ổn định
-const CHUNK_SIZE = 64 * 1024; // 64KB per chunk
+const CHUNK_SIZE = 64 * 1024;
 
 // ─── State ────────────────────────────────────────────────────
-let senderPeer = null;   // ✅ Fix 4: peer riêng cho sender
-let receiverPeer = null; // ✅ Fix 4: peer riêng cho receiver
-let senderConn = null;
-let receiverConn = null;
-let fileBuffer = null;
-let fileName = '';
-let fileSize = 0;
+let senderPeer = null, receiverPeer = null;
+let senderConn = null, receiverConn = null;
+let fileBuffer = null, fileName = '', fileSize = 0;
 
-// Receiver chunk reassembly
-let receivedChunks = [];
-let receivedBytes = 0;
-let expectedSize = 0;
-let expectedName = '';
+// Receiver reassembly
+let receivedChunks = [], receivedBytes = 0;
+let expectedSize = 0, expectedName = '', expectedChecksum = '';
 
-// ─── DOM refs ─────────────────────────────────────────────────
+// ✅ Bảo mật 2: Rate limit thử PIN phía client
+let pinAttempts = 0, pinLockUntil = 0;
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_LOCK_MS = 30_000; // khoá 30s sau 5 lần sai
+
 const $ = id => document.getElementById(id);
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -426,20 +422,16 @@ function showStatus(id, msg, type = 'ok') {
     el.className = `status show ${type}`;
 }
 
-function hideStatus(id) {
-    $(id).className = 'status';
-}
-
 window.copyText = function(id) {
     navigator.clipboard.writeText($(id).innerText)
-        .then(() => { showStatus('senderStatus', '✅ Đã sao chép ID!', 'ok'); })
+        .then(() => showStatus('senderStatus', '✅ Đã sao chép ID!', 'ok'))
         .catch(() => {});
 };
 
 function formatBytes(b) {
     if (b < 1024) return b + ' B';
-    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
-    return (b / 1024 / 1024).toFixed(2) + ' MB';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    return (b / 1048576).toFixed(2) + ' MB';
 }
 
 function setProgress(wrapId, barId, labelId, chunkId, pct, label, chunkText, done = false) {
@@ -451,215 +443,214 @@ function setProgress(wrapId, barId, labelId, chunkId, pct, label, chunkText, don
     if (chunkId) $(chunkId).textContent = chunkText;
 }
 
-// ─── Fix 3: Load server config ────────────────────────────────
+// ✅ Bảo mật 1: Hash PIN bằng SHA-256 (Web Crypto API — built-in trình duyệt)
+async function hashPin(pin) {
+    const encoded = new TextEncoder().encode(pin);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ✅ Bảo mật 3: Tính SHA-256 checksum của file
+async function checksumBuffer(buffer) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── Load config ──────────────────────────────────────────────
 async function loadConfig() {
     try {
         const res = await fetch('/config');
         return await res.json();
     } catch {
-        // Fallback nếu không fetch được (mở trực tiếp file HTML)
-        return { peerHost: 'localhost', peerPort: 9000, peerPath: '/', secure: false };
+        return { peerHost: 'localhost', peerPort: 9000, peerPath: '/peerjs', secure: false };
     }
 }
 
-// ─── Init both peers ──────────────────────────────────────────
+// ─── Init peers ───────────────────────────────────────────────
 async function initPeers() {
     const cfg = await loadConfig();
+    const peerOpts = { host: cfg.peerHost, port: cfg.peerPort, path: cfg.peerPath, secure: cfg.secure };
 
-    // ✅ Fix 4: Tạo 2 Peer riêng biệt với ID khác nhau
-    senderPeer = new Peer(undefined, {
-        host: cfg.peerHost,
-        port: cfg.peerPort,
-        path: cfg.peerPath,
-        secure: cfg.secure
-    });
+    senderPeer = new Peer(undefined, peerOpts);
+    receiverPeer = new Peer(undefined, peerOpts);
 
-    receiverPeer = new Peer(undefined, {
-        host: cfg.peerHost,
-        port: cfg.peerPort,
-        path: cfg.peerPath,
-        secure: cfg.secure
-    });
-
-    // Sender peer open
     senderPeer.on('open', id => {
         $('senderPeerId').innerText = id;
         $('copySenderBtn').disabled = false;
         $('sendBtn').disabled = false;
     });
+    senderPeer.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
 
-    senderPeer.on('error', err => {
-        showStatus('senderStatus', '❌ Lỗi: ' + err.message, 'err');
-    });
-
-    // Receiver peer open
     receiverPeer.on('open', id => {
         $('receiverPeerId').innerText = id;
         $('copyReceiverBtn').disabled = false;
         $('connectBtn').disabled = false;
     });
+    receiverPeer.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
 
-    receiverPeer.on('error', err => {
-        showStatus('receiverStatus', '❌ Lỗi: ' + err.message, 'err');
-    });
-
-    // ─── Sender: lắng nghe incoming connection ────────────────
+    // ─── Sender: xử lý incoming connection ───────────────────
     senderPeer.on('connection', conn => {
         senderConn = conn;
+        // ✅ Bảo mật 2: Theo dõi số lần thử PIN sai per-connection
+        let connPinAttempts = 0;
 
-        conn.on('open', () => {
-            showStatus('senderStatus', '📞 Người nhận đã kết nối — đang xác thực PIN…', 'warn');
-        });
+        conn.on('open', () => showStatus('senderStatus', '📞 Người nhận đã kết nối — đang xác thực PIN…', 'warn'));
 
-        conn.on('data', msg => {
-            // ✅ Fix 5: Nhận yêu cầu xác thực PIN từ receiver
+        conn.on('data', async msg => {
             if (msg.type === 'auth') {
                 const myPin = $('senderPin').value.trim();
                 if (!myPin) {
                     conn.send({ type: 'auth_result', ok: false, reason: 'Người gửi chưa đặt PIN' });
-                    showStatus('senderStatus', '⚠️ Bạn chưa đặt mã PIN!', 'warn');
                     return;
                 }
-                if (msg.pin !== myPin) {
-                    conn.send({ type: 'auth_result', ok: false, reason: 'Sai mã PIN' });
-                    showStatus('senderStatus', '🚫 Người nhận nhập sai PIN — từ chối kết nối', 'err');
+
+                // ✅ Bảo mật 2: Giới hạn thử sai 5 lần rồi ngắt
+                connPinAttempts++;
+                if (connPinAttempts > MAX_PIN_ATTEMPTS) {
+                    conn.send({ type: 'auth_result', ok: false, reason: 'Quá nhiều lần thử sai — kết nối bị từ chối' });
+                    showStatus('senderStatus', '🚫 Kẻ tấn công đã bị chặn (>5 lần sai PIN)', 'err');
+                    conn.close();
                     return;
                 }
+
+                // ✅ Bảo mật 1: So sánh hash thay vì plaintext
+                const myHash = await hashPin(myPin);
+                if (msg.pinHash !== myHash) {
+                    conn.send({ type: 'auth_result', ok: false, reason: `Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})` });
+                    showStatus('senderStatus', `🚫 Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})`, 'warn');
+                    return;
+                }
+
+                // ✅ Bảo mật 3: Tính checksum trước khi gửi
+                showStatus('senderStatus', '🔢 Đang tính checksum file…', 'warn');
+                const checksum = await checksumBuffer(fileBuffer);
+
                 conn.send({ type: 'auth_result', ok: true });
                 showStatus('senderStatus', '✅ Xác thực PIN thành công — đang gửi file…', 'ok');
 
-                // Gửi file sau khi xác thực
                 if (fileBuffer) {
-                    sendFileChunked(conn);
+                    sendFileChunked(conn, checksum);
                 } else {
                     showStatus('senderStatus', '⚠️ Bạn chưa chọn file!', 'warn');
                 }
             }
         });
 
-        conn.on('error', err => {
-            showStatus('senderStatus', '❌ Lỗi kết nối: ' + err.message, 'err');
-        });
+        conn.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
     });
 }
 
 // ─── File selection ───────────────────────────────────────────
-$('fileInput').addEventListener('change', handleFile);
+$('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
 
 const dropArea = $('dropArea');
 dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
 dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
 dropArea.addEventListener('drop', e => {
-    e.preventDefault();
-    dropArea.classList.remove('dragover');
+    e.preventDefault(); dropArea.classList.remove('dragover');
     if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
 });
 
-function handleFile(e) {
-    if (e.target.files[0]) processFile(e.target.files[0]);
-}
-
 function processFile(file) {
-    fileName = file.name;
-    fileSize = file.size;
+    fileName = file.name; fileSize = file.size;
     const info = $('fileInfoSender');
     info.style.display = 'block';
     info.textContent = `📄 ${fileName} — ${formatBytes(fileSize)}`;
     showStatus('senderStatus', `📁 Đã chọn: ${fileName}`, 'ok');
-
     const reader = new FileReader();
-    reader.onload = e => {
-        fileBuffer = e.target.result;
-    };
+    reader.onload = e => { fileBuffer = e.target.result; };
     reader.readAsArrayBuffer(file);
 }
 
 // ─── Send btn ─────────────────────────────────────────────────
 $('sendBtn').addEventListener('click', () => {
     if (!fileBuffer) { showStatus('senderStatus', '⚠️ Chưa chọn file!', 'warn'); return; }
-    const pin = $('senderPin').value.trim();
-    if (!pin) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN bảo mật!', 'warn'); return; }
+    if (!$('senderPin').value.trim()) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN!', 'warn'); return; }
     showStatus('senderStatus', '⏳ Đang chờ người nhận kết nối…', 'warn');
 });
 
-// ─── Fix 1: Gửi file theo từng chunk ─────────────────────────
-function sendFileChunked(conn) {
+// ─── Gửi file theo chunk + kèm checksum ──────────────────────
+function sendFileChunked(conn, checksum) {
     const totalChunks = Math.ceil(fileBuffer.byteLength / CHUNK_SIZE);
 
-    // Gửi header trước
-    conn.send({
-        type: 'file_header',
-        fileName: fileName,
-        fileSize: fileBuffer.byteLength,
-        totalChunks: totalChunks
-    });
+    // ✅ Bảo mật 3: Gửi checksum SHA-256 kèm header
+    conn.send({ type: 'file_header', fileName, fileSize: fileBuffer.byteLength, totalChunks, checksum });
 
-    let chunkIndex = 0;
-
-    function sendNextChunk() {
-        if (chunkIndex >= totalChunks) {
-            // Gửi xong
+    let i = 0;
+    function sendNext() {
+        if (i >= totalChunks) {
             conn.send({ type: 'file_done' });
             setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
                 'senderChunkInfo', 100, `✅ Đã gửi ${fileName}`, `${totalChunks}/${totalChunks} chunks`, true);
-            showStatus('senderStatus', `✅ Gửi thành công: ${fileName} (${formatBytes(fileBuffer.byteLength)})`, 'ok');
+            showStatus('senderStatus', `✅ Gửi thành công: ${fileName}`, 'ok');
             return;
         }
-
-        const start = chunkIndex * CHUNK_SIZE;
+        const start = i * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, fileBuffer.byteLength);
-        const chunk = fileBuffer.slice(start, end);
-
-        conn.send({ type: 'file_chunk', index: chunkIndex, data: chunk });
-
-        const pct = Math.round((chunkIndex + 1) / totalChunks * 100);
+        conn.send({ type: 'file_chunk', index: i, data: fileBuffer.slice(start, end) });
+        const pct = Math.round((i + 1) / totalChunks * 100);
         setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
             'senderChunkInfo', pct, `📤 Đang gửi… ${pct}%`,
-            `chunk ${chunkIndex + 1}/${totalChunks} · ${formatBytes(end)}/${formatBytes(fileBuffer.byteLength)}`);
-
-        chunkIndex++;
-        // Delay nhỏ tránh overwhelm DataChannel
-        setTimeout(sendNextChunk, 10);
+            `chunk ${i + 1}/${totalChunks} · ${formatBytes(end)}/${formatBytes(fileBuffer.byteLength)}`);
+        i++;
+        setTimeout(sendNext, 10);
     }
-
-    sendNextChunk();
+    sendNext();
 }
 
-// ─── Connect btn (receiver side) ─────────────────────────────
-$('connectBtn').addEventListener('click', () => {
+// ─── Connect btn (receiver) ───────────────────────────────────
+$('connectBtn').addEventListener('click', async () => {
     const targetId = $('targetPeerId').value.trim();
-    if (!targetId) { showStatus('receiverStatus', '⚠️ Vui lòng nhập Peer ID người gửi!', 'warn'); return; }
+    if (!targetId) { showStatus('receiverStatus', '⚠️ Nhập Peer ID người gửi!', 'warn'); return; }
     const pin = $('receiverPin').value.trim();
-    if (!pin) { showStatus('receiverStatus', '⚠️ Vui lòng nhập mã PIN!', 'warn'); return; }
+    if (!pin) { showStatus('receiverStatus', '⚠️ Nhập mã PIN!', 'warn'); return; }
+
+    // ✅ Bảo mật 2: Khoá nếu thử sai quá nhiều lần
+    if (Date.now() < pinLockUntil) {
+        const wait = Math.ceil((pinLockUntil - Date.now()) / 1000);
+        showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s do nhập sai quá nhiều lần`, 'err');
+        return;
+    }
 
     showStatus('receiverStatus', '⏳ Đang kết nối…', 'warn');
     receiverConn = receiverPeer.connect(targetId, { reliable: true });
 
-    receiverConn.on('open', () => {
+    receiverConn.on('open', async () => {
         showStatus('receiverStatus', '🔐 Đang xác thực PIN…', 'warn');
-        // ✅ Fix 5: Gửi PIN để xác thực
-        receiverConn.send({ type: 'auth', pin: pin });
+        // ✅ Bảo mật 1: Chỉ gửi hash, không gửi PIN gốc
+        const pinHash = await hashPin(pin);
+        receiverConn.send({ type: 'auth', pinHash });
     });
 
-    receiverConn.on('data', msg => {
+    receiverConn.on('data', async msg => {
         if (msg.type === 'auth_result') {
             if (!msg.ok) {
-                showStatus('receiverStatus', `🚫 Xác thực thất bại: ${msg.reason}`, 'err');
+                pinAttempts++;
+                if (pinAttempts >= MAX_PIN_ATTEMPTS) {
+                    pinLockUntil = Date.now() + PIN_LOCK_MS;
+                    pinAttempts = 0;
+                    showStatus('receiverStatus', `🔒 Khoá 30s do sai PIN ${MAX_PIN_ATTEMPTS} lần liên tiếp`, 'err');
+                } else {
+                    showStatus('receiverStatus', `🚫 ${msg.reason}`, 'err');
+                }
                 receiverConn.close();
                 return;
             }
+            // Reset đếm khi thành công
+            pinAttempts = 0;
             showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
-            receivedChunks = [];
-            receivedBytes = 0;
+            receivedChunks = []; receivedBytes = 0;
         }
         else if (msg.type === 'file_header') {
             expectedName = msg.fileName;
             expectedSize = msg.fileSize;
+            expectedChecksum = msg.checksum; // ✅ Lưu checksum để kiểm tra sau
             receivedChunks = new Array(msg.totalChunks);
             receivedBytes = 0;
             showStatus('receiverStatus', `📥 Đang nhận: ${expectedName} (${formatBytes(expectedSize)})`, 'ok');
         }
-        // ✅ Fix 1+2: Nhận từng chunk, progress thật
         else if (msg.type === 'file_chunk') {
             receivedChunks[msg.index] = msg.data;
             receivedBytes += msg.data.byteLength;
@@ -669,26 +660,32 @@ $('connectBtn').addEventListener('click', () => {
                 `${formatBytes(receivedBytes)} / ${formatBytes(expectedSize)}`);
         }
         else if (msg.type === 'file_done') {
-            // Ghép file lại
+            // ✅ Bảo mật 3: Xác minh checksum trước khi cho tải
+            showStatus('receiverStatus', '🔢 Đang xác minh tính toàn vẹn file…', 'warn');
             const blob = new Blob(receivedChunks);
+            const arrayBuffer = await blob.arrayBuffer();
+            const actualChecksum = await checksumBuffer(arrayBuffer);
+
+            if (actualChecksum !== expectedChecksum) {
+                showStatus('receiverStatus', '❌ File bị lỗi hoặc giả mạo! Checksum không khớp — huỷ tải xuống.', 'err');
+                return;
+            }
+
+            // Checksum khớp → an toàn để tải
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = expectedName;
-            document.body.appendChild(a);
-            a.click();
+            a.href = url; a.download = expectedName;
+            document.body.appendChild(a); a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
             setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
-                'receiverChunkInfo', 100, `✅ Đã nhận ${expectedName}`, `${formatBytes(expectedSize)}`, true);
-            showStatus('receiverStatus', `✅ Tải xuống thành công: ${expectedName}`, 'ok');
+                'receiverChunkInfo', 100, `✅ Đã nhận ${expectedName}`, `${formatBytes(expectedSize)} · ✓ SHA-256`, true);
+            showStatus('receiverStatus', `✅ Tải xuống thành công & đã xác minh toàn vẹn: ${expectedName}`, 'ok');
         }
     });
 
-    receiverConn.on('error', err => {
-        showStatus('receiverStatus', '❌ Lỗi: ' + err.message, 'err');
-    });
+    receiverConn.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
 });
 
 // ─── Start ────────────────────────────────────────────────────
