@@ -6,7 +6,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
-// ✅ Bảo mật 4: Tắt allow_discovery — ẩn danh sách Peer ID
 const peerServer = ExpressPeerServer(server, {
   path: '/',
   allow_discovery: false,
@@ -21,8 +20,6 @@ peerServer.on('disconnect', (client) => {
   console.log(`❌ Peer disconnected: ${client.getId()}`);
 });
 
-// ✅ Bảo mật 2: Rate limiting thủ công (không cần thư viện ngoài)
-// Giới hạn mỗi IP chỉ được gọi /config tối đa 30 lần/phút
 const rateLimitMap = new Map(); // ip -> { count, resetAt }
 
 function rateLimit(req, res, next) {
