@@ -313,7 +313,6 @@
                 <span class="badge badge-send">Tạo phòng</span>
             </div>
 
-            <!-- ✅ Fix 4: Sender có Peer ID riêng -->
             <div class="id-row">
                 <span class="id-label">Peer ID của bạn:</span>
                 <span class="id-value" id="senderPeerId">Đang kết nối…</span>
@@ -328,7 +327,6 @@
             </div>
             <div class="file-info" id="fileInfoSender"></div>
 
-            <!-- ✅ Fix 5: PIN bảo mật -->
             <div class="pin-group">
                 <label><span class="lock">🔐</span> Mã PIN bảo mật (người nhận cần nhập đúng)</label>
                 <input type="text" class="pin-input" id="senderPin" maxlength="6" placeholder="••••••" autocomplete="off">
@@ -358,7 +356,6 @@
                 <span class="badge badge-recv">Kết nối</span>
             </div>
 
-            <!-- ✅ Fix 4: Receiver có Peer ID riêng -->
             <div class="id-row">
                 <span class="id-label">Peer ID của bạn:</span>
                 <span class="id-value" id="receiverPeerId">Đang kết nối…</span>
@@ -370,13 +367,11 @@
                 <button class="btn btn-primary btn-sm" id="connectBtn" disabled>Kết nối</button>
             </div>
 
-            <!-- ✅ Fix 5: PIN nhập phía receiver -->
             <div class="pin-group">
                 <label><span class="lock">🔐</span> Nhập mã PIN từ người gửi</label>
                 <input type="text" class="pin-input" id="receiverPin" maxlength="6" placeholder="••••••" autocomplete="off">
             </div>
 
-            <!-- ✅ Fix 2: Progress bar thật -->
             <div class="progress-wrap" id="receiverProgressWrap">
                 <div class="progress-meta">
                     <span id="receiverProgressLabel">Đang nhận…</span>
@@ -394,7 +389,6 @@
     <footer>⚡ Dữ liệu truyền qua WebRTC — không lưu trên server &nbsp;·&nbsp; Cả hai phải online cùng lúc</footer>
 </div>
 
-<!-- ✅ Fix 3: Load config từ server thay vì hardcode -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const CHUNK_SIZE = 64 * 1024;
@@ -404,11 +398,9 @@ let senderPeer = null, receiverPeer = null;
 let senderConn = null, receiverConn = null;
 let fileBuffer = null, fileName = '', fileSize = 0;
 
-// Receiver reassembly
 let receivedChunks = [], receivedBytes = 0;
 let expectedSize = 0, expectedName = '', expectedChecksum = '';
 
-// ✅ Bảo mật 2: Rate limit thử PIN phía client
 let pinAttempts = 0, pinLockUntil = 0;
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MS = 30_000; // khoá 30s sau 5 lần sai
@@ -443,7 +435,6 @@ function setProgress(wrapId, barId, labelId, chunkId, pct, label, chunkText, don
     if (chunkId) $(chunkId).textContent = chunkText;
 }
 
-// ✅ Bảo mật 1: Hash PIN bằng SHA-256 (Web Crypto API — built-in trình duyệt)
 async function hashPin(pin) {
     const encoded = new TextEncoder().encode(pin);
     const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
@@ -451,7 +442,6 @@ async function hashPin(pin) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ✅ Bảo mật 3: Tính SHA-256 checksum của file
 async function checksumBuffer(buffer) {
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -493,7 +483,6 @@ async function initPeers() {
     // ─── Sender: xử lý incoming connection ───────────────────
     senderPeer.on('connection', conn => {
         senderConn = conn;
-        // ✅ Bảo mật 2: Theo dõi số lần thử PIN sai per-connection
         let connPinAttempts = 0;
 
         conn.on('open', () => showStatus('senderStatus', '📞 Người nhận đã kết nối — đang xác thực PIN…', 'warn'));
@@ -506,7 +495,6 @@ async function initPeers() {
                     return;
                 }
 
-                // ✅ Bảo mật 2: Giới hạn thử sai 5 lần rồi ngắt
                 connPinAttempts++;
                 if (connPinAttempts > MAX_PIN_ATTEMPTS) {
                     conn.send({ type: 'auth_result', ok: false, reason: 'Quá nhiều lần thử sai — kết nối bị từ chối' });
@@ -515,7 +503,6 @@ async function initPeers() {
                     return;
                 }
 
-                // ✅ Bảo mật 1: So sánh hash thay vì plaintext
                 const myHash = await hashPin(myPin);
                 if (msg.pinHash !== myHash) {
                     conn.send({ type: 'auth_result', ok: false, reason: `Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})` });
@@ -523,7 +510,6 @@ async function initPeers() {
                     return;
                 }
 
-                // ✅ Bảo mật 3: Tính checksum trước khi gửi
                 showStatus('senderStatus', '🔢 Đang tính checksum file…', 'warn');
                 const checksum = await checksumBuffer(fileBuffer);
 
@@ -575,7 +561,6 @@ $('sendBtn').addEventListener('click', () => {
 function sendFileChunked(conn, checksum) {
     const totalChunks = Math.ceil(fileBuffer.byteLength / CHUNK_SIZE);
 
-    // ✅ Bảo mật 3: Gửi checksum SHA-256 kèm header
     conn.send({ type: 'file_header', fileName, fileSize: fileBuffer.byteLength, totalChunks, checksum });
 
     let i = 0;
@@ -607,7 +592,6 @@ $('connectBtn').addEventListener('click', async () => {
     const pin = $('receiverPin').value.trim();
     if (!pin) { showStatus('receiverStatus', '⚠️ Nhập mã PIN!', 'warn'); return; }
 
-    // ✅ Bảo mật 2: Khoá nếu thử sai quá nhiều lần
     if (Date.now() < pinLockUntil) {
         const wait = Math.ceil((pinLockUntil - Date.now()) / 1000);
         showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s do nhập sai quá nhiều lần`, 'err');
@@ -619,7 +603,6 @@ $('connectBtn').addEventListener('click', async () => {
 
     receiverConn.on('open', async () => {
         showStatus('receiverStatus', '🔐 Đang xác thực PIN…', 'warn');
-        // ✅ Bảo mật 1: Chỉ gửi hash, không gửi PIN gốc
         const pinHash = await hashPin(pin);
         receiverConn.send({ type: 'auth', pinHash });
     });
