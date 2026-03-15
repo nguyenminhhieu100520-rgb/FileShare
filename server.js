@@ -163,43 +163,31 @@ app.use(express.static('public'));
 // Middleware rateLimit được áp dụng trước handler chính.
 app.get('/config', rateLimit, (req, res) => {
 
-    // ── Phát hiện HTTPS ──────────────────────────────────────────
-    // Render dùng reverse proxy nên req.secure luôn false.
-    // Phải đọc x-forwarded-proto do proxy inject vào.
-    const proto    = req.headers['x-forwarded-proto'] || '';
-    const isSecure = proto.split(',')[0].trim() === 'https' || req.secure;
-
-    // ── Lấy hostname đúng trên Render ────────────────────────────
-    // Vấn đề: req.hostname trên Render đôi khi trả về hostname nội bộ
-    //   (dạng 10.x.x.x hoặc render-internal-hostname) thay vì domain thật.
-    //
-    // Thứ tự ưu tiên:
-    //   1. x-forwarded-host — header Render inject chứa domain trình duyệt đã dùng
-    //      VD: "fileshare-1-c7sh.onrender.com"
-    //   2. host — header HTTP chuẩn, trình duyệt gửi kèm mọi request
-    //      VD: "fileshare-1-c7sh.onrender.com:443" hoặc "localhost:3000"
-    //   3. req.hostname — Express parse từ host header (bỏ port)
-    //
-    // Với host header có thể chứa ":port", cần tách lấy phần hostname.
-    const fwdHost  = req.headers['x-forwarded-host'];
-    const hostHdr  = req.headers['host'] || '';
-    const rawHost  = fwdHost || hostHdr;
-    // Tách hostname khỏi port (VD: "localhost:3000" → "localhost")
-    const peerHost = rawHost.split(':')[0] || req.hostname;
-
-    // ── Xác định port ────────────────────────────────────────────
-    // HTTPS trên Render → port 443 (chuẩn, không cần ghi trong URL)
-    // HTTP local        → PORT của server (thường 3000)
-    const peerPort = isSecure ? 443 : PORT;
-
-    // Log để debug trên Render (xem trong Logs tab)
-    console.log(`[/config] host=${peerHost} port=${peerPort} secure=${isSecure} | fwd-host=${fwdHost} host-hdr=${hostHdr} proto=${proto}`);
+    // Phát hiện HTTPS qua header x-forwarded-proto.
+    // Tại sao cần header này?
+    //   Render dùng reverse proxy: browser → HTTPS → Render → HTTP → Node.js
+    //   req.secure chỉ true nếu kết nối đến Node.js là HTTPS (không phải).
+    //   Header x-forwarded-proto ghi lại protocol gốc browser đã dùng.
+    //   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Proto
+    const isSecure = req.headers['x-forwarded-proto'] === 'https' || req.secure;
 
     res.json({
-        peerHost,
-        peerPort,
+        // req.hostname: tên miền hiện tại
+        //   Local  → "localhost"
+        //   Render → "myapp.onrender.com"
+        peerHost: req.hostname,
+
+        // Port chuẩn: HTTPS=443, HTTP=PORT của app.
+        // PeerJS client cần đúng port để kết nối WebSocket tới PeerServer.
+        peerPort: isSecure ? 443 : PORT,
+
+        // Phải khớp với app.use('/peerjs', peerServer) ở trên
         peerPath: '/peerjs',
-        secure:   isSecure,
+
+        // true  → PeerJS dùng wss:// (WebSocket Secure — bắt buộc với HTTPS)
+        // false → PeerJS dùng ws://  (WebSocket thường — chỉ cho local)
+        // Tại sao phải khớp? Trang HTTPS không được dùng ws:// (mixed content)
+        secure: isSecure,
     });
 });
 
