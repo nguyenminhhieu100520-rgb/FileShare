@@ -345,7 +345,28 @@
 //    currentRecvFile — object tạm chứa chunks của file đang nhận
 // ════════════════════════════════════════════════════════════════
 
-const CHUNK_SIZE = 64 * 1024; // 64KB mỗi chunk
+// ── ADAPTIVE CHUNK SIZE (AIMD) ────────────────────────────────────
+// Thay vì cố định 64KB, chunk size tự điều chỉnh theo tình trạng buffer:
+//   - Buffer < LOW  → tăng dần +8KB (Additive Increase)
+//   - Buffer > HIGH → giảm mạnh ×0.5 (Multiplicative Decrease)
+// Tham chiếu: thuật toán tắc nghẽn TCP (RFC 5681)
+const adaptiveChunk = {
+    size:    64 * 1024,   // kích thước hiện tại, bắt đầu 64KB
+    min:     16 * 1024,   // sàn 16KB — đủ overhead nhỏ
+    max:    256 * 1024,   // trần 256KB — tránh freeze browser
+    step:    8  * 1024,   // bước tăng mỗi lần ổn định
+};
+
+// Ngưỡng bufferedAmount của DataChannel
+const BUFFER_HIGH = 512 * 1024;  // > 512KB → giảm chunk, đợi
+const BUFFER_LOW  = 128 * 1024;  // < 128KB → an toàn tăng chunk
+
+// Speed meter state
+const speedMeter = {
+    bytes:       0,
+    windowStart: 0,
+    lastKBps:    0,
+};
 
 // ── STATE SENDER ─────────────────────────────────────────────────
 // fileQueue: mảng các object đại diện file cần gửi
@@ -586,6 +607,12 @@ async function sendAllFiles(conn) {
     isSending = true;
     renderQueue(); // ẩn nút xóa
 
+    // Reset adaptive state cho session mới
+    adaptiveChunk.size = 64 * 1024;
+    speedMeter.bytes = 0;
+    speedMeter.windowStart = Date.now();
+    speedMeter.lastKBps = 0;
+
     // Tính tổng bytes để hiện progress tổng
     const totalBytes = fileQueue.reduce((s, f) => s + f.size, 0);
     let bytesSentTotal = 0;
@@ -615,10 +642,13 @@ async function sendAllFiles(conn) {
         await sendOneFile(conn, qf, i, checksum, (bytesSent) => {
             // Callback cập nhật progress tổng
             const overall = Math.round((bytesSentTotal + bytesSent) / totalBytes * 100);
+            const speedTxt = speedMeter.lastKBps > 0
+                ? ` · ${speedMeter.lastKBps} KB/s · chunk ${adaptiveChunk.size / 1024 | 0}KB`
+                : '';
             setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
                 'senderChunkInfo', overall,
                 `📤 File ${i+1}/${fileQueue.length}: ${qf.name}`,
-                `Tổng: ${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}`
+                `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}`
             );
             // Cập nhật mini bar của file đang gửi
             const filePct = Math.round(bytesSent / qf.size * 100);
@@ -642,43 +672,111 @@ async function sendAllFiles(conn) {
     renderQueue();
 }
 
-// ── GỬI MỘT FILE (trả về Promise) ────────────────────────────────
-// Tương tự sendFileChunked cũ nhưng:
-//   1. Trả về Promise → caller có thể await
-//   2. Nhận callback onProgress(bytesSent) để cập nhật UI
-//   3. Gửi thêm fileIndex và totalFiles trong header
+// ── GỬI MỘT FILE (trả về Promise, adaptive chunk + backpressure) ──
+// Cải tiến so với bản cũ:
+//   1. Chunk size tự điều chỉnh theo bufferedAmount (AIMD)
+//   2. Backpressure: dùng bufferedAmountLowThreshold thay vì setTimeout cố định
+//   3. Speed meter cập nhật mỗi 500ms để hiện KB/s lên UI
 function sendOneFile(conn, qf, fileIndex, checksum, onProgress) {
     return new Promise(resolve => {
-        const buf         = qf.buffer;
-        const totalChunks = Math.ceil(buf.byteLength / CHUNK_SIZE);
+        const buf = qf.buffer;
 
-        // Header: thêm fileIndex để receiver biết đây là file thứ mấy
+        // Reset adaptive state khi bắt đầu file mới
+        adaptiveChunk.size = 64 * 1024;
+        speedMeter.bytes = 0;
+        speedMeter.windowStart = Date.now();
+
+        // Tính totalChunks dựa trên chunk size ban đầu (chỉ dùng cho header,
+        // receiver sẽ đếm thực tế qua file_done)
+        const totalChunks = Math.ceil(buf.byteLength / adaptiveChunk.size);
+
         conn.send({
             type: 'file_header',
             fileName:   qf.name,
             fileSize:   buf.byteLength,
             totalChunks,
             checksum,
-            fileIndex,          // <-- MỚI: chỉ số file trong session
+            fileIndex,
         });
 
-        let i = 0;
+        let offset    = 0;
         let bytesSent = 0;
 
+        // Lấy DataChannel thô từ PeerJS connection để đọc bufferedAmount
+        // PeerJS lưu ở conn._dc (internal), fallback về conn.dataChannel
+        const dc = conn._dc || conn.dataChannel || null;
+
+        function adjustChunkSize() {
+            if (!dc) return;
+            const buffered = dc.bufferedAmount;
+            if (buffered > BUFFER_HIGH) {
+                // Tắc nghẽn — Multiplicative Decrease
+                adaptiveChunk.size = Math.max(
+                    adaptiveChunk.min,
+                    Math.round(adaptiveChunk.size * 0.5)
+                );
+            } else if (buffered < BUFFER_LOW) {
+                // Ổn định — Additive Increase
+                adaptiveChunk.size = Math.min(
+                    adaptiveChunk.max,
+                    adaptiveChunk.size + adaptiveChunk.step
+                );
+            }
+            // Giữa hai ngưỡng: giữ nguyên
+        }
+
+        function updateSpeedMeter(justSentBytes) {
+            speedMeter.bytes += justSentBytes;
+            const now = Date.now();
+            const elapsed = now - speedMeter.windowStart;
+            if (elapsed >= 500) {
+                speedMeter.lastKBps = Math.round(speedMeter.bytes / elapsed);
+                speedMeter.bytes = 0;
+                speedMeter.windowStart = now;
+                // Cập nhật dòng chunk info trong progress bar
+                const chunkEl = $('senderChunkInfo');
+                if (chunkEl) {
+                    chunkEl.textContent =
+                        `${speedMeter.lastKBps} KB/s · chunk ${adaptiveChunk.size / 1024 | 0}KB`;
+                }
+            }
+        }
+
         function sendNext() {
-            if (i >= totalChunks) {
+            if (offset >= buf.byteLength) {
                 conn.send({ type: 'file_done', fileIndex });
                 onProgress(buf.byteLength);
-                resolve(); // file này xong, Promise resolved → sendAllFiles tiếp tục
+                resolve();
                 return;
             }
-            const start = i * CHUNK_SIZE;
-            const end   = Math.min(start + CHUNK_SIZE, buf.byteLength);
-            conn.send({ type: 'file_chunk', index: i, data: buf.slice(start, end) });
-            bytesSent += (end - start);
+
+            // Kiểm tra backpressure trước khi gửi
+            if (dc && dc.bufferedAmount > BUFFER_HIGH) {
+                // Buffer đang đầy — đặt ngưỡng thấp để browser callback khi thoát
+                dc.bufferedAmountLowThreshold = BUFFER_LOW;
+                dc.onbufferedamountlow = () => {
+                    dc.onbufferedamountlow = null;
+                    adjustChunkSize();
+                    sendNext();
+                };
+                return; // dừng gửi, chờ callback
+            }
+
+            adjustChunkSize();
+
+            const end   = Math.min(offset + adaptiveChunk.size, buf.byteLength);
+            const chunk = buf.slice(offset, end);
+            const chunkBytes = end - offset;
+
+            conn.send({ type: 'file_chunk', index: Math.floor(offset / adaptiveChunk.size), data: chunk });
+
+            offset    += chunkBytes;
+            bytesSent += chunkBytes;
             onProgress(bytesSent);
-            i++;
-            setTimeout(sendNext, 10); // nhường event loop 10ms
+            updateSpeedMeter(chunkBytes);
+
+            // setTimeout(0) nhường event loop — tránh freeze UI với file lớn
+            setTimeout(sendNext, 0);
         }
 
         sendNext();
