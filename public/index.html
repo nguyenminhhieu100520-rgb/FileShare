@@ -3,26 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chia sẻ file P2P</title>
+    <title>P2P FileShare — Multi-file</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0d1117;
-            --surface: #161b22;
-            --surface2: #21262d;
-            --border: #30363d;
-            --blue: #58a6ff;
-            --blue-dim: #1f6feb;
-            --green: #3fb950;
-            --red: #f85149;
-            --yellow: #e3b341;
-            --text: #e6edf3;
+            --bg:         #0d1117;
+            --surface:    #161b22;
+            --surface2:   #21262d;
+            --border:     #30363d;
+            --blue:       #58a6ff;
+            --blue-dim:   #1f6feb;
+            --green:      #3fb950;
+            --red:        #f85149;
+            --yellow:     #e3b341;
+            --text:       #e6edf3;
             --text-muted: #8b949e;
-            --radius: 12px;
+            --radius:     12px;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
             font-family: 'Sora', sans-serif;
             background: var(--bg);
@@ -33,279 +31,195 @@
             align-items: center;
             padding: 30px 20px;
         }
-
-        /* Background grid */
         body::before {
             content: '';
-            position: fixed;
-            inset: 0;
+            position: fixed; inset: 0;
             background-image:
                 linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
             background-size: 40px 40px;
-            pointer-events: none;
-            z-index: 0;
+            pointer-events: none; z-index: 0;
         }
-
-        .wrapper {
-            max-width: 960px;
-            width: 100%;
-            position: relative;
-            z-index: 1;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 36px;
-        }
-
-        header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            color: var(--text);
-        }
-
+        .wrapper { max-width: 960px; width: 100%; position: relative; z-index: 1; }
+        header { text-align: center; margin-bottom: 36px; }
+        header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
         header h1 span { color: var(--blue); }
-
-        header p {
-            margin-top: 8px;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
+        header p { margin-top: 8px; color: var(--text-muted); font-size: 0.9rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+            border-radius: 16px; padding: 24px;
+            display: flex; flex-direction: column; gap: 16px;
         }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .card-header h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .badge {
-            margin-left: auto;
-            font-size: 0.75rem;
-            padding: 3px 10px;
-            border-radius: 20px;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
+        .card-header { display: flex; align-items: center; gap: 10px; }
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .badge { margin-left: auto; font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
         .badge-send { background: rgba(88,166,255,0.15); color: var(--blue); }
         .badge-recv { background: rgba(63,185,80,0.15); color: var(--green); }
 
         /* ID row */
-        .id-row {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
+        .id-row { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
         .id-label { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
-
-        .id-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: var(--blue);
-            flex: 1;
-            word-break: break-all;
-        }
-
-        .copy-btn {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text-muted);
-            padding: 4px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-family: 'Sora', sans-serif;
-            transition: all 0.15s;
-            white-space: nowrap;
-        }
+        .id-value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--blue); flex: 1; word-break: break-all; }
+        .copy-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; white-space: nowrap; }
         .copy-btn:hover { border-color: var(--blue); color: var(--blue); }
 
-        /* Drop area */
+        /* ── Drop area ── */
         .drop-area {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 28px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: var(--surface2);
-            position: relative;
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 22px 16px; text-align: center; cursor: pointer;
+            transition: all 0.2s; background: var(--surface2); position: relative;
         }
-        .drop-area:hover, .drop-area.dragover {
-            border-color: var(--blue);
-            background: rgba(88,166,255,0.05);
-        }
-        .drop-area .icon { font-size: 32px; margin-bottom: 8px; }
-        .drop-area p { font-size: 0.875rem; color: var(--text-muted); }
+        .drop-area:hover, .drop-area.dragover { border-color: var(--blue); background: rgba(88,166,255,0.05); }
+        .drop-area .icon { font-size: 28px; margin-bottom: 6px; }
+        .drop-area p { font-size: 0.85rem; color: var(--text-muted); }
         .drop-area p strong { color: var(--blue); }
+        .drop-area p.hint { font-size: 0.75rem; margin-top: 4px; }
 
-        .file-info {
-            background: rgba(63,185,80,0.1);
-            border: 1px solid rgba(63,185,80,0.3);
-            border-radius: var(--radius);
-            padding: 10px 14px;
-            font-size: 0.85rem;
-            color: var(--green);
-            display: none;
+        /* ── File queue (MULTI-FILE) ── */
+        /*
+         * THAY ĐỔI CHÍNH so với bản cũ:
+         * Thay vì .file-info (1 dòng text), giờ dùng .file-queue — danh sách
+         * các file sẽ gửi. Mỗi file là 1 .queue-item có thể xóa riêng lẻ.
+         */
+        .file-queue {
+            display: flex; flex-direction: column; gap: 6px;
+            max-height: 220px; overflow-y: auto;
         }
+        /* Header của queue: "3 file · 12.4 MB" + nút Xóa hết */
+        .queue-header {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 0.78rem; color: var(--text-muted);
+            padding: 0 2px;
+        }
+        .queue-clear-btn {
+            background: none; border: none; color: var(--red);
+            cursor: pointer; font-size: 0.75rem; padding: 2px 6px;
+            border-radius: 6px; font-family: 'Sora', sans-serif;
+            transition: background 0.15s;
+        }
+        .queue-clear-btn:hover { background: rgba(248,81,73,0.12); }
+
+        /* Mỗi dòng trong queue */
+        .queue-item {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 10px;
+            font-size: 0.82rem;
+            transition: border-color 0.15s;
+        }
+        /* Trạng thái file: pending / sending / done / error */
+        .queue-item.sending { border-color: var(--blue); }
+        .queue-item.done    { border-color: var(--green); opacity: 0.7; }
+        .queue-item.error   { border-color: var(--red); }
+
+        .queue-item .q-icon { font-size: 1rem; flex-shrink: 0; }
+        .queue-item .q-name {
+            flex: 1; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; color: var(--text);
+        }
+        .queue-item .q-size { color: var(--text-muted); font-size: 0.75rem; white-space: nowrap; }
+        .queue-item .q-status { font-size: 0.72rem; white-space: nowrap; }
+        .queue-item .q-del {
+            background: none; border: none; color: var(--text-muted);
+            cursor: pointer; padding: 2px 5px; border-radius: 4px;
+            font-size: 0.9rem; line-height: 1; transition: color 0.15s;
+            flex-shrink: 0;
+        }
+        .queue-item .q-del:hover { color: var(--red); }
+
+        /* Mini progress bar bên trong mỗi queue-item khi đang gửi */
+        .q-mini-bar-wrap {
+            width: 100%; height: 3px;
+            background: var(--border); border-radius: 99px;
+            margin-top: 4px; overflow: hidden;
+        }
+        .q-mini-bar {
+            height: 100%; width: 0%;
+            background: var(--blue); border-radius: 99px;
+            transition: width 0.15s;
+        }
+        .queue-item.done .q-mini-bar { background: var(--green); width: 100%; }
 
         /* PIN */
-        .pin-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .pin-group label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+        .pin-group { display: flex; flex-direction: column; gap: 6px; }
+        .pin-group label { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
         .pin-group label .lock { color: var(--yellow); }
         .pin-input {
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 10px 14px;
-            border-radius: var(--radius);
-            font-size: 0.95rem;
-            font-family: 'JetBrains Mono', monospace;
-            width: 100%;
-            outline: none;
-            transition: border 0.2s;
-            letter-spacing: 4px;
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: var(--radius);
+            font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;
+            width: 100%; outline: none; transition: border 0.2s; letter-spacing: 4px;
         }
         .pin-input:focus { border-color: var(--yellow); }
 
         /* Input group */
-        .input-group {
-            display: flex;
-            gap: 8px;
-        }
+        .input-group { display: flex; gap: 8px; }
         .input-group input {
-            flex: 1;
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 10px 14px;
-            border-radius: var(--radius);
-            font-size: 0.9rem;
-            font-family: 'JetBrains Mono', monospace;
-            outline: none;
+            flex: 1; background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); padding: 10px 14px; border-radius: var(--radius);
+            font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; outline: none;
             transition: border 0.2s;
         }
         .input-group input::placeholder { color: var(--text-muted); letter-spacing: 0; font-family: 'Sora', sans-serif; }
         .input-group input:focus { border-color: var(--blue); }
 
         /* Buttons */
-        .btn {
-            border: none;
-            padding: 11px 18px;
-            border-radius: var(--radius);
-            font-size: 0.9rem;
-            font-weight: 600;
-            font-family: 'Sora', sans-serif;
-            cursor: pointer;
-            transition: all 0.15s;
-            width: 100%;
-        }
+        .btn { border: none; padding: 11px 18px; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; font-family: 'Sora', sans-serif; cursor: pointer; transition: all 0.15s; width: 100%; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .btn-primary { background: var(--blue-dim); color: white; }
         .btn-primary:not(:disabled):hover { background: var(--blue); }
-        .btn-success { background: rgba(63,185,80,0.2); color: var(--green); border: 1px solid rgba(63,185,80,0.4); }
-        .btn-success:not(:disabled):hover { background: rgba(63,185,80,0.3); }
         .btn-sm { width: auto; padding: 8px 14px; }
 
         /* Status */
-        .status {
-            border-radius: var(--radius);
-            padding: 10px 14px;
-            font-size: 0.85rem;
-            display: none;
-            line-height: 1.5;
-        }
+        .status { border-radius: var(--radius); padding: 10px 14px; font-size: 0.85rem; display: none; line-height: 1.5; }
         .status.show { display: block; }
-        .status.ok { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); color: var(--green); }
-        .status.err { background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); color: var(--red); }
+        .status.ok   { background: rgba(63,185,80,0.1);  border: 1px solid rgba(63,185,80,0.3);  color: var(--green); }
+        .status.err  { background: rgba(248,81,73,0.1);  border: 1px solid rgba(248,81,73,0.3);  color: var(--red); }
         .status.warn { background: rgba(227,179,65,0.1); border: 1px solid rgba(227,179,65,0.3); color: var(--yellow); }
 
-        /* Progress */
+        /* Progress tổng (overall) */
         .progress-wrap { display: none; flex-direction: column; gap: 6px; }
         .progress-wrap.show { display: flex; }
         .progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); }
-        .progress-track {
-            height: 8px;
-            background: var(--surface2);
-            border-radius: 99px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-        }
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            border-radius: 99px;
-            transition: width 0.2s;
-            background: linear-gradient(90deg, var(--blue-dim), var(--blue));
-        }
+        .progress-track { height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); }
+        .progress-bar { height: 100%; width: 0%; border-radius: 99px; transition: width 0.2s; background: linear-gradient(90deg, var(--blue-dim), var(--blue)); }
         .progress-bar.done { background: linear-gradient(90deg, #2ea043, var(--green)); }
+        .chunk-info { font-size: 0.78rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
 
-        /* Chunk info */
-        .chunk-info {
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            font-family: 'JetBrains Mono', monospace;
+        /* Receiver file list */
+        .recv-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+        .recv-item {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 10px; font-size: 0.82rem;
         }
+        .recv-item.receiving { border-color: var(--blue); }
+        .recv-item.verified  { border-color: var(--green); }
+        .recv-item.bad       { border-color: var(--red); }
+        .recv-item .r-name   { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .recv-item .r-size   { color: var(--text-muted); font-size: 0.75rem; }
+        .recv-item .r-badge  { font-size: 0.7rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+        .r-badge.ok  { background: rgba(63,185,80,0.15);  color: var(--green); }
+        .r-badge.err { background: rgba(248,81,73,0.15);  color: var(--red); }
+        .r-badge.cur { background: rgba(88,166,255,0.15); color: var(--blue); }
+        .r-mini-wrap { width: 100%; height: 3px; background: var(--border); border-radius: 99px; margin-top: 4px; overflow: hidden; }
+        .r-mini-bar  { height: 100%; width: 0%; background: var(--blue); border-radius: 99px; transition: width 0.15s; }
 
-        footer {
-            margin-top: 28px;
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.82rem;
-        }
-
-        @media (max-width: 680px) {
-            .grid { grid-template-columns: 1fr; }
-            header h1 { font-size: 1.5rem; }
-        }
+        footer { margin-top: 28px; text-align: center; color: var(--text-muted); font-size: 0.82rem; }
+        @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } header h1 { font-size: 1.5rem; } }
     </style>
 </head>
 <body>
 <div class="wrapper">
     <header>
         <h1>☁️ P2P <span>FileShare</span></h1>
-        <p>Truyền file trực tiếp — không qua server, không giới hạn kích thước</p>
+        <p>Truyền nhiều file trực tiếp — không qua server, không giới hạn kích thước</p>
     </header>
 
     <div class="grid">
-        <!-- SENDER -->
+        <!-- ══ SENDER ═════════════════════════════════════════════ -->
         <div class="card">
             <div class="card-header">
                 <span style="font-size:1.3rem">📤</span>
@@ -314,27 +228,42 @@
             </div>
 
             <div class="id-row">
-                <span class="id-label">Peer ID của bạn:</span>
+                <span class="id-label">Peer ID:</span>
                 <span class="id-value" id="senderPeerId">Đang kết nối…</span>
                 <button class="copy-btn" id="copySenderBtn" onclick="copyText('senderPeerId')" disabled>Sao chép</button>
             </div>
 
-            <!-- Drop area -->
+            <!--
+                THAY ĐỔI 1: Thêm multiple vào input → cho phép chọn nhiều file.
+                Drag & drop cũng nhận e.dataTransfer.files (FileList, nhiều file).
+            -->
             <div class="drop-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
                 <div class="icon">📂</div>
                 <p>Kéo thả file vào đây hoặc <strong>nhấp để chọn</strong></p>
-                <input type="file" id="fileInput" style="display:none">
+                <p class="hint">Hỗ trợ chọn nhiều file cùng lúc</p>
+                <input type="file" id="fileInput" style="display:none" multiple>
             </div>
-            <div class="file-info" id="fileInfoSender"></div>
+
+            <!--
+                THAY ĐỔI 2: Thay .file-info (1 dòng) bằng .file-queue (danh sách).
+                JavaScript sẽ render từng .queue-item vào đây.
+            -->
+            <div id="fileQueue" style="display:none">
+                <div class="queue-header">
+                    <span id="queueSummary"></span>
+                    <button class="queue-clear-btn" onclick="clearQueue()">✕ Xóa hết</button>
+                </div>
+                <div class="file-queue" id="queueList"></div>
+            </div>
 
             <div class="pin-group">
-                <label><span class="lock">🔐</span> Mã PIN bảo mật (người nhận cần nhập đúng)</label>
+                <label><span class="lock">🔐</span> Mã PIN bảo mật</label>
                 <input type="text" class="pin-input" id="senderPin" maxlength="6" placeholder="••••••" autocomplete="off">
             </div>
 
             <button class="btn btn-primary" id="sendBtn" disabled>🚀 Tạo phòng và chờ kết nối</button>
 
-            <!-- Progress sender -->
+            <!-- Progress tổng — hiện khi đang gửi -->
             <div class="progress-wrap" id="senderProgressWrap">
                 <div class="progress-meta">
                     <span id="senderProgressLabel">Đang gửi…</span>
@@ -344,11 +273,10 @@
                     <div class="progress-bar" id="senderProgressBar"></div>
                 </div>
             </div>
-
             <div class="status" id="senderStatus"></div>
         </div>
 
-        <!-- RECEIVER -->
+        <!-- ══ RECEIVER ═══════════════════════════════════════════ -->
         <div class="card">
             <div class="card-header">
                 <span style="font-size:1.3rem">📥</span>
@@ -357,13 +285,13 @@
             </div>
 
             <div class="id-row">
-                <span class="id-label">Peer ID của bạn:</span>
+                <span class="id-label">Peer ID:</span>
                 <span class="id-value" id="receiverPeerId">Đang kết nối…</span>
                 <button class="copy-btn" id="copyReceiverBtn" onclick="copyText('receiverPeerId')" disabled>Sao chép</button>
             </div>
 
             <div class="input-group">
-                <input type="text" id="targetPeerId" placeholder="Nhập Peer ID của người gửi">
+                <input type="text" id="targetPeerId" placeholder="Nhập Peer ID người gửi">
                 <button class="btn btn-primary btn-sm" id="connectBtn" disabled>Kết nối</button>
             </div>
 
@@ -372,6 +300,7 @@
                 <input type="text" class="pin-input" id="receiverPin" maxlength="6" placeholder="••••••" autocomplete="off">
             </div>
 
+            <!-- Progress tổng phía receiver -->
             <div class="progress-wrap" id="receiverProgressWrap">
                 <div class="progress-meta">
                     <span id="receiverProgressLabel">Đang nhận…</span>
@@ -380,6 +309,14 @@
                 <div class="progress-track">
                     <div class="progress-bar" id="receiverProgressBar"></div>
                 </div>
+            </div>
+
+            <!-- Danh sách file đã nhận -->
+            <div id="recvQueue" style="display:none">
+                <div class="queue-header">
+                    <span id="recvSummary" style="font-size:0.78rem;color:var(--text-muted)"></span>
+                </div>
+                <div class="recv-list" id="recvList"></div>
             </div>
 
             <div class="status" id="receiverStatus"></div>
@@ -391,85 +328,208 @@
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
-const CHUNK_SIZE = 64 * 1024;
+// ════════════════════════════════════════════════════════════════
+//  MULTI-FILE P2P FILESHARE
+//  Điểm khác biệt cốt lõi so với bản single-file:
+//
+//  SENDER:
+//    fileQueue[]  — mảng object { file, buffer, name, size, status }
+//    Gửi tuần tự từng file: gửi xong file[i] → gửi file[i+1]
+//    Mỗi file vẫn dùng giao thức: file_header → file_chunk* → file_done
+//    Thêm trường `fileIndex` và `totalFiles` vào file_header để
+//    receiver biết đây là file thứ mấy trong tổng số bao nhiêu.
+//
+//  RECEIVER:
+//    recvFiles[]  — mảng lưu thông tin từng file đã / đang nhận
+//    Nhận và tải xuống từng file ngay khi có file_done (không đợi hết)
+//    currentRecvFile — object tạm chứa chunks của file đang nhận
+// ════════════════════════════════════════════════════════════════
 
-// ─── State ────────────────────────────────────────────────────
-let senderPeer = null, receiverPeer = null;
-let senderConn = null, receiverConn = null;
-let fileBuffer = null, fileName = '', fileSize = 0;
+const CHUNK_SIZE = 64 * 1024; // 64KB mỗi chunk
 
-let receivedChunks = [], receivedBytes = 0;
-let expectedSize = 0, expectedName = '', expectedChecksum = '';
+// ── STATE SENDER ─────────────────────────────────────────────────
+// fileQueue: mảng các object đại diện file cần gửi
+// Mỗi phần tử: { file: File, buffer: ArrayBuffer|null, name, size, status }
+// status: 'pending' | 'reading' | 'sending' | 'done' | 'error'
+let fileQueue    = [];
+let isSending    = false; // đang gửi → không cho thêm/xóa
+let senderConn   = null;
+let senderPeer   = null;
 
-let pinAttempts = 0, pinLockUntil = 0;
-const MAX_PIN_ATTEMPTS = 5;
-const PIN_LOCK_MS = 30_000; // khoá 30s sau 5 lần sai
+// ── STATE RECEIVER ───────────────────────────────────────────────
+// currentRecvFile: buffer tạm của file đang nhận
+// recvFiles: lịch sử các file đã nhận
+let receiverPeer   = null;
+let receiverConn   = null;
+let currentRecvFile = null; // { chunks[], receivedBytes, expectedSize, name, checksum, totalChunks, fileIndex }
+let recvFiles       = [];   // [{ name, size, status: 'ok'|'err' }]
+
+// Tổng tiến trình receiver (bytes)
+let recvTotalBytes    = 0;
+let recvExpectedTotal = 0;
+
+// Rate limit
+let pinAttempts  = 0, pinLockUntil = 0;
+const MAX_PIN_ATTEMPTS = 5, PIN_LOCK_MS = 30_000;
 
 const $ = id => document.getElementById(id);
 
-// ─── Helpers ──────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────
 function showStatus(id, msg, type = 'ok') {
     const el = $(id);
     el.textContent = msg;
     el.className = `status show ${type}`;
 }
-
-window.copyText = function(id) {
-    navigator.clipboard.writeText($(id).innerText)
-        .then(() => showStatus('senderStatus', '✅ Đã sao chép ID!', 'ok'))
-        .catch(() => {});
-};
-
+window.copyText = id => navigator.clipboard.writeText($(id).innerText).then(() => showStatus('senderStatus', '✅ Đã sao chép!', 'ok')).catch(() => {});
 function formatBytes(b) {
     if (b < 1024) return b + ' B';
-    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-    return (b / 1048576).toFixed(2) + ' MB';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(2) + ' MB';
 }
-
-function setProgress(wrapId, barId, labelId, chunkId, pct, label, chunkText, done = false) {
+function setProgress(wrapId, barId, labelId, chunkId, pct, label, extra, done = false) {
     $(wrapId).className = 'progress-wrap show';
     const bar = $(barId);
     bar.style.width = pct + '%';
     bar.className = 'progress-bar' + (done ? ' done' : '');
     $(labelId).textContent = label;
-    if (chunkId) $(chunkId).textContent = chunkText;
+    if (chunkId) $(chunkId).textContent = extra;
 }
-
 async function hashPin(pin) {
-    const encoded = new TextEncoder().encode(pin);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
-
-async function checksumBuffer(buffer) {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+async function checksumBuffer(buf) {
+    const h = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
-
-// ─── Load config ──────────────────────────────────────────────
 async function loadConfig() {
-    try {
-        const res = await fetch('/config');
-        return await res.json();
-    } catch {
-        return { peerHost: 'localhost', peerPort: 9000, peerPath: '/peerjs', secure: false };
+    try { const r = await fetch('/config'); return await r.json(); }
+    catch { return { peerHost:'localhost', peerPort:9000, peerPath:'/peerjs', secure:false }; }
+}
+
+// ── QUEUE UI ──────────────────────────────────────────────────────
+// Render lại toàn bộ danh sách file trong queue.
+// Mỗi file có: icon trạng thái, tên, kích thước, mini progress bar, nút xóa.
+function renderQueue() {
+    const wrap = $('fileQueue');
+    const list = $('queueList');
+    const summary = $('queueSummary');
+
+    if (fileQueue.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    // Tóm tắt: "3 file · 12.4 MB"
+    const totalSize = fileQueue.reduce((s, f) => s + f.size, 0);
+    summary.textContent = `${fileQueue.length} file · ${formatBytes(totalSize)}`;
+
+    list.innerHTML = '';
+    fileQueue.forEach((f, i) => {
+        const icons = { pending:'📄', reading:'⏳', sending:'📤', done:'✅', error:'❌' };
+        const statusText = { pending:'Chờ', reading:'Đọc…', sending:'Đang gửi', done:'Xong', error:'Lỗi' };
+        const el = document.createElement('div');
+        el.className = `queue-item ${f.status !== 'pending' && f.status !== 'reading' ? f.status : ''}`;
+        el.id = `qi-${i}`;
+        el.innerHTML = `
+            <span class="q-icon">${icons[f.status]}</span>
+            <span class="q-name" title="${f.name}">${f.name}</span>
+            <span class="q-size">${formatBytes(f.size)}</span>
+            <span class="q-status" style="color:${f.status==='done'?'var(--green)':f.status==='error'?'var(--red)':f.status==='sending'?'var(--blue)':'var(--text-muted)'}">${statusText[f.status]}</span>
+            ${!isSending ? `<button class="q-del" onclick="removeFromQueue(${i})" title="Xóa">✕</button>` : ''}
+            ${f.status === 'sending' ? `<div class="q-mini-bar-wrap" style="grid-column:1/-1"><div class="q-mini-bar" id="qbar-${i}"></div></div>` : ''}
+        `;
+        // Nếu file done, set mini bar = 100% green
+        if (f.status === 'done') {
+            const bar = el.querySelector('.q-mini-bar');
+            if (bar) bar.style.width = '100%';
+        }
+        list.appendChild(el);
+    });
+}
+
+function updateQueueItemBar(i, pct) {
+    const bar = $(`qbar-${i}`);
+    if (bar) bar.style.width = pct + '%';
+}
+
+// Xóa một file khỏi queue (chỉ được khi chưa gửi)
+window.removeFromQueue = function(i) {
+    if (isSending) return;
+    fileQueue.splice(i, 1);
+    renderQueue();
+    if (fileQueue.length === 0) {
+        $('sendBtn').disabled = true;
+        showStatus('senderStatus', '', 'ok');
+        $('senderStatus').className = 'status';
+    }
+};
+window.clearQueue = function() {
+    if (isSending) return;
+    fileQueue = [];
+    renderQueue();
+    $('sendBtn').disabled = true;
+};
+
+// ── ĐỌC FILES VÀO ARRAYBUFFER ────────────────────────────────────
+// Đọc bất đồng bộ một File object → ArrayBuffer
+// Trả về Promise để có thể await
+function readFileAsBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Đọc file thất bại'));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// ── THÊM FILE VÀO QUEUE ───────────────────────────────────────────
+// Nhận FileList (từ input hoặc drop), lọc trùng, thêm vào fileQueue
+function addFilesToQueue(fileList) {
+    let added = 0;
+    for (const file of fileList) {
+        // Kiểm tra trùng tên trong queue hiện tại
+        const exists = fileQueue.some(f => f.name === file.name && f.size === file.size);
+        if (!exists) {
+            fileQueue.push({ file, buffer: null, name: file.name, size: file.size, status: 'pending' });
+            added++;
+        }
+    }
+    if (added > 0) {
+        renderQueue();
+        $('sendBtn').disabled = fileQueue.length === 0;
+        showStatus('senderStatus', `✅ Đã thêm ${added} file vào hàng đợi`, 'ok');
+    } else {
+        showStatus('senderStatus', '⚠️ Các file này đã có trong hàng đợi', 'warn');
     }
 }
 
-// ─── Init peers ───────────────────────────────────────────────
-async function initPeers() {
-    const cfg = await loadConfig();
-    const peerOpts = { host: cfg.peerHost, port: cfg.peerPort, path: cfg.peerPath, secure: cfg.secure };
+// ── FILE INPUT & DROP ─────────────────────────────────────────────
+// Nhận FileList từ input[multiple]
+$('fileInput').addEventListener('change', e => {
+    if (e.target.files.length > 0) addFilesToQueue(e.target.files);
+    e.target.value = ''; // reset để có thể chọn lại cùng file
+});
 
-    senderPeer = new Peer(undefined, peerOpts);
-    receiverPeer = new Peer(undefined, peerOpts);
+const dropArea = $('dropArea');
+dropArea.addEventListener('dragover',  e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
+    // e.dataTransfer.files là FileList — có thể chứa nhiều file
+    if (e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files);
+});
+
+// ── INIT PEERS ────────────────────────────────────────────────────
+async function initPeers() {
+    const cfg  = await loadConfig();
+    const opts = { host: cfg.peerHost, port: cfg.peerPort, path: cfg.peerPath, secure: cfg.secure };
+
+    senderPeer   = new Peer(undefined, opts);
+    receiverPeer = new Peer(undefined, opts);
 
     senderPeer.on('open', id => {
         $('senderPeerId').innerText = id;
         $('copySenderBtn').disabled = false;
-        $('sendBtn').disabled = false;
     });
     senderPeer.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
 
@@ -480,112 +540,159 @@ async function initPeers() {
     });
     receiverPeer.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
 
-    // ─── Sender: xử lý incoming connection ───────────────────
+    // ── Xử lý khi có receiver kết nối vào sender ──────────────────
     senderPeer.on('connection', conn => {
         senderConn = conn;
         let connPinAttempts = 0;
 
-        conn.on('open', () => showStatus('senderStatus', '📞 Người nhận đã kết nối — đang xác thực PIN…', 'warn'));
+        conn.on('open', () => showStatus('senderStatus', '📞 Đã kết nối — đang xác thực PIN…', 'warn'));
 
         conn.on('data', async msg => {
             if (msg.type === 'auth') {
                 const myPin = $('senderPin').value.trim();
-                if (!myPin) {
-                    conn.send({ type: 'auth_result', ok: false, reason: 'Người gửi chưa đặt PIN' });
-                    return;
-                }
+                if (!myPin) { conn.send({ type:'auth_result', ok:false, reason:'Chưa đặt PIN' }); return; }
 
                 connPinAttempts++;
                 if (connPinAttempts > MAX_PIN_ATTEMPTS) {
-                    conn.send({ type: 'auth_result', ok: false, reason: 'Quá nhiều lần thử sai — kết nối bị từ chối' });
-                    showStatus('senderStatus', '🚫 Kẻ tấn công đã bị chặn (>5 lần sai PIN)', 'err');
-                    conn.close();
-                    return;
+                    conn.send({ type:'auth_result', ok:false, reason:'Quá nhiều lần sai PIN' });
+                    showStatus('senderStatus', '🚫 Bị chặn do sai PIN nhiều lần', 'err');
+                    conn.close(); return;
                 }
 
                 const myHash = await hashPin(myPin);
                 if (msg.pinHash !== myHash) {
-                    conn.send({ type: 'auth_result', ok: false, reason: `Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})` });
+                    conn.send({ type:'auth_result', ok:false, reason:`Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})` });
                     showStatus('senderStatus', `🚫 Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})`, 'warn');
                     return;
                 }
 
-                showStatus('senderStatus', '🔢 Đang tính checksum file…', 'warn');
-                const checksum = await checksumBuffer(fileBuffer);
-
-                conn.send({ type: 'auth_result', ok: true });
-                showStatus('senderStatus', '✅ Xác thực PIN thành công — đang gửi file…', 'ok');
-
-                if (fileBuffer) {
-                    sendFileChunked(conn, checksum);
-                } else {
-                    showStatus('senderStatus', '⚠️ Bạn chưa chọn file!', 'warn');
-                }
+                // ✅ PIN đúng → bắt đầu gửi tuần tự từng file
+                conn.send({ type:'auth_result', ok:true });
+                // Thông báo receiver tổng số file sẽ gửi
+                conn.send({ type:'session_info', totalFiles: fileQueue.length });
+                showStatus('senderStatus', `✅ Xác thực thành công — bắt đầu gửi ${fileQueue.length} file…`, 'ok');
+                sendAllFiles(conn);
             }
         });
-
         conn.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
     });
 }
 
-// ─── File selection ───────────────────────────────────────────
-$('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+// ── GỬI TUẦN TỰ TẤT CẢ FILE ──────────────────────────────────────
+// Đây là hàm điều phối: đọc buffer và gửi từng file theo thứ tự.
+// Gửi xong file i → gọi tiếp file i+1 (không gửi song song vì
+// DataChannel không đảm bảo thứ tự giữa nhiều luồng).
+async function sendAllFiles(conn) {
+    isSending = true;
+    renderQueue(); // ẩn nút xóa
 
-const dropArea = $('dropArea');
-dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
-dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
-dropArea.addEventListener('drop', e => {
-    e.preventDefault(); dropArea.classList.remove('dragover');
-    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
-});
+    // Tính tổng bytes để hiện progress tổng
+    const totalBytes = fileQueue.reduce((s, f) => s + f.size, 0);
+    let bytesSentTotal = 0;
 
-function processFile(file) {
-    fileName = file.name; fileSize = file.size;
-    const info = $('fileInfoSender');
-    info.style.display = 'block';
-    info.textContent = `📄 ${fileName} — ${formatBytes(fileSize)}`;
-    showStatus('senderStatus', `📁 Đã chọn: ${fileName}`, 'ok');
-    const reader = new FileReader();
-    reader.onload = e => { fileBuffer = e.target.result; };
-    reader.readAsArrayBuffer(file);
-}
+    for (let i = 0; i < fileQueue.length; i++) {
+        const qf = fileQueue[i];
+        qf.status = 'reading';
+        renderQueue();
+        showStatus('senderStatus', `⏳ Đọc file ${i+1}/${fileQueue.length}: ${qf.name}`, 'warn');
 
-// ─── Send btn ─────────────────────────────────────────────────
-$('sendBtn').addEventListener('click', () => {
-    if (!fileBuffer) { showStatus('senderStatus', '⚠️ Chưa chọn file!', 'warn'); return; }
-    if (!$('senderPin').value.trim()) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN!', 'warn'); return; }
-    showStatus('senderStatus', '⏳ Đang chờ người nhận kết nối…', 'warn');
-});
-
-// ─── Gửi file theo chunk + kèm checksum ──────────────────────
-function sendFileChunked(conn, checksum) {
-    const totalChunks = Math.ceil(fileBuffer.byteLength / CHUNK_SIZE);
-
-    conn.send({ type: 'file_header', fileName, fileSize: fileBuffer.byteLength, totalChunks, checksum });
-
-    let i = 0;
-    function sendNext() {
-        if (i >= totalChunks) {
-            conn.send({ type: 'file_done' });
-            setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
-                'senderChunkInfo', 100, `✅ Đã gửi ${fileName}`, `${totalChunks}/${totalChunks} chunks`, true);
-            showStatus('senderStatus', `✅ Gửi thành công: ${fileName}`, 'ok');
-            return;
+        // Đọc file vào ArrayBuffer (bất đồng bộ, không block UI)
+        try {
+            qf.buffer = await readFileAsBuffer(qf.file);
+        } catch {
+            qf.status = 'error';
+            renderQueue();
+            showStatus('senderStatus', `❌ Không đọc được file: ${qf.name}`, 'err');
+            continue; // bỏ qua, gửi file tiếp theo
         }
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, fileBuffer.byteLength);
-        conn.send({ type: 'file_chunk', index: i, data: fileBuffer.slice(start, end) });
-        const pct = Math.round((i + 1) / totalChunks * 100);
-        setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
-            'senderChunkInfo', pct, `📤 Đang gửi… ${pct}%`,
-            `chunk ${i + 1}/${totalChunks} · ${formatBytes(end)}/${formatBytes(fileBuffer.byteLength)}`);
-        i++;
-        setTimeout(sendNext, 10);
+
+        // Tính checksum SHA-256
+        const checksum = await checksumBuffer(qf.buffer);
+        qf.status = 'sending';
+        renderQueue();
+
+        // Gửi file này và chờ hoàn tất (await Promise)
+        await sendOneFile(conn, qf, i, checksum, (bytesSent) => {
+            // Callback cập nhật progress tổng
+            const overall = Math.round((bytesSentTotal + bytesSent) / totalBytes * 100);
+            setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+                'senderChunkInfo', overall,
+                `📤 File ${i+1}/${fileQueue.length}: ${qf.name}`,
+                `Tổng: ${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}`
+            );
+            // Cập nhật mini bar của file đang gửi
+            const filePct = Math.round(bytesSent / qf.size * 100);
+            updateQueueItemBar(i, filePct);
+        });
+
+        qf.status = 'done';
+        bytesSentTotal += qf.size;
+        renderQueue();
     }
-    sendNext();
+
+    // Gửi xong tất cả
+    conn.send({ type: 'all_done' });
+    isSending = false;
+    setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+        'senderChunkInfo', 100,
+        `✅ Đã gửi ${fileQueue.length} file`,
+        `Tổng: ${formatBytes(totalBytes)}`, true
+    );
+    showStatus('senderStatus', `✅ Gửi xong tất cả ${fileQueue.length} file!`, 'ok');
+    renderQueue();
 }
 
-// ─── Connect btn (receiver) ───────────────────────────────────
+// ── GỬI MỘT FILE (trả về Promise) ────────────────────────────────
+// Tương tự sendFileChunked cũ nhưng:
+//   1. Trả về Promise → caller có thể await
+//   2. Nhận callback onProgress(bytesSent) để cập nhật UI
+//   3. Gửi thêm fileIndex và totalFiles trong header
+function sendOneFile(conn, qf, fileIndex, checksum, onProgress) {
+    return new Promise(resolve => {
+        const buf         = qf.buffer;
+        const totalChunks = Math.ceil(buf.byteLength / CHUNK_SIZE);
+
+        // Header: thêm fileIndex để receiver biết đây là file thứ mấy
+        conn.send({
+            type: 'file_header',
+            fileName:   qf.name,
+            fileSize:   buf.byteLength,
+            totalChunks,
+            checksum,
+            fileIndex,          // <-- MỚI: chỉ số file trong session
+        });
+
+        let i = 0;
+        let bytesSent = 0;
+
+        function sendNext() {
+            if (i >= totalChunks) {
+                conn.send({ type: 'file_done', fileIndex });
+                onProgress(buf.byteLength);
+                resolve(); // file này xong, Promise resolved → sendAllFiles tiếp tục
+                return;
+            }
+            const start = i * CHUNK_SIZE;
+            const end   = Math.min(start + CHUNK_SIZE, buf.byteLength);
+            conn.send({ type: 'file_chunk', index: i, data: buf.slice(start, end) });
+            bytesSent += (end - start);
+            onProgress(bytesSent);
+            i++;
+            setTimeout(sendNext, 10); // nhường event loop 10ms
+        }
+
+        sendNext();
+    });
+}
+
+// ── NÚT "TẠO PHÒNG" ──────────────────────────────────────────────
+$('sendBtn').addEventListener('click', () => {
+    if (fileQueue.length === 0) { showStatus('senderStatus', '⚠️ Chưa thêm file nào!', 'warn'); return; }
+    if (!$('senderPin').value.trim()) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN!', 'warn'); return; }
+    showStatus('senderStatus', `⏳ Đang chờ người nhận kết nối… (${fileQueue.length} file sẵn sàng)`, 'warn');
+});
+
+// ── RECEIVER: NÚT KẾT NỐI ────────────────────────────────────────
 $('connectBtn').addEventListener('click', async () => {
     const targetId = $('targetPeerId').value.trim();
     if (!targetId) { showStatus('receiverStatus', '⚠️ Nhập Peer ID người gửi!', 'warn'); return; }
@@ -594,11 +701,19 @@ $('connectBtn').addEventListener('click', async () => {
 
     if (Date.now() < pinLockUntil) {
         const wait = Math.ceil((pinLockUntil - Date.now()) / 1000);
-        showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s do nhập sai quá nhiều lần`, 'err');
+        showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s`, 'err');
         return;
     }
 
     showStatus('receiverStatus', '⏳ Đang kết nối…', 'warn');
+    // Reset trạng thái nhận
+    recvFiles        = [];
+    recvTotalBytes   = 0;
+    recvExpectedTotal = 0;
+    currentRecvFile  = null;
+    $('recvQueue').style.display = 'none';
+    $('recvList').innerHTML = '';
+
     receiverConn = receiverPeer.connect(targetId, { reliable: true });
 
     receiverConn.on('open', async () => {
@@ -608,70 +723,160 @@ $('connectBtn').addEventListener('click', async () => {
     });
 
     receiverConn.on('data', async msg => {
+
+        // ── Kết quả xác thực PIN ──
         if (msg.type === 'auth_result') {
             if (!msg.ok) {
                 pinAttempts++;
                 if (pinAttempts >= MAX_PIN_ATTEMPTS) {
                     pinLockUntil = Date.now() + PIN_LOCK_MS;
-                    pinAttempts = 0;
-                    showStatus('receiverStatus', `🔒 Khoá 30s do sai PIN ${MAX_PIN_ATTEMPTS} lần liên tiếp`, 'err');
+                    pinAttempts  = 0;
+                    showStatus('receiverStatus', `🔒 Khoá 30s do sai PIN ${MAX_PIN_ATTEMPTS} lần`, 'err');
                 } else {
                     showStatus('receiverStatus', `🚫 ${msg.reason}`, 'err');
                 }
-                receiverConn.close();
-                return;
+                receiverConn.close(); return;
             }
-            // Reset đếm khi thành công
             pinAttempts = 0;
             showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
-            receivedChunks = []; receivedBytes = 0;
         }
-        else if (msg.type === 'file_header') {
-            expectedName = msg.fileName;
-            expectedSize = msg.fileSize;
-            expectedChecksum = msg.checksum; // ✅ Lưu checksum để kiểm tra sau
-            receivedChunks = new Array(msg.totalChunks);
-            receivedBytes = 0;
-            showStatus('receiverStatus', `📥 Đang nhận: ${expectedName} (${formatBytes(expectedSize)})`, 'ok');
-        }
-        else if (msg.type === 'file_chunk') {
-            receivedChunks[msg.index] = msg.data;
-            receivedBytes += msg.data.byteLength;
-            const pct = Math.round(receivedBytes / expectedSize * 100);
-            setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
-                'receiverChunkInfo', pct, `📥 Đang nhận… ${pct}%`,
-                `${formatBytes(receivedBytes)} / ${formatBytes(expectedSize)}`);
-        }
-        else if (msg.type === 'file_done') {
-            // ✅ Bảo mật 3: Xác minh checksum trước khi cho tải
-            showStatus('receiverStatus', '🔢 Đang xác minh tính toàn vẹn file…', 'warn');
-            const blob = new Blob(receivedChunks);
-            const arrayBuffer = await blob.arrayBuffer();
-            const actualChecksum = await checksumBuffer(arrayBuffer);
 
-            if (actualChecksum !== expectedChecksum) {
-                showStatus('receiverStatus', '❌ File bị lỗi hoặc giả mạo! Checksum không khớp — huỷ tải xuống.', 'err');
+        // ── Thông tin session: tổng số file ──
+        // Sender gửi trước khi gửi file đầu tiên
+        else if (msg.type === 'session_info') {
+            recvExpectedTotal = 0; // sẽ tính khi nhận từng header
+            showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
+        }
+
+        // ── Header của một file ──
+        else if (msg.type === 'file_header') {
+            // Khởi tạo object chứa dữ liệu file đang nhận
+            currentRecvFile = {
+                chunks:        new Array(msg.totalChunks),
+                receivedBytes: 0,
+                expectedSize:  msg.fileSize,
+                name:          msg.fileName,
+                checksum:      msg.checksum,
+                totalChunks:   msg.totalChunks,
+                fileIndex:     msg.fileIndex,
+            };
+            recvExpectedTotal += msg.fileSize;
+
+            // Thêm dòng vào danh sách UI
+            recvFiles.push({ name: msg.fileName, size: msg.fileSize, status: 'receiving' });
+            renderRecvList();
+            showStatus('receiverStatus', `📥 Đang nhận file ${msg.fileIndex + 1}: ${msg.fileName}`, 'ok');
+        }
+
+        // ── Nhận chunk ──
+        else if (msg.type === 'file_chunk') {
+            if (!currentRecvFile) return;
+            currentRecvFile.chunks[msg.index] = msg.data;
+            currentRecvFile.receivedBytes += msg.data.byteLength;
+            recvTotalBytes += msg.data.byteLength;
+
+            // Cập nhật mini bar của file đang nhận
+            const filePct = Math.round(currentRecvFile.receivedBytes / currentRecvFile.expectedSize * 100);
+            updateRecvItemBar(currentRecvFile.fileIndex, filePct);
+
+            // Cập nhật progress tổng
+            const overallPct = recvExpectedTotal > 0
+                ? Math.round(recvTotalBytes / recvExpectedTotal * 100)
+                : 0;
+            setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
+                'receiverChunkInfo', overallPct,
+                `📥 File ${currentRecvFile.fileIndex + 1}: ${currentRecvFile.name}`,
+                `${formatBytes(recvTotalBytes)} / ${formatBytes(recvExpectedTotal)}`
+            );
+        }
+
+        // ── File hoàn thành: xác minh và tải xuống ──
+        else if (msg.type === 'file_done') {
+            if (!currentRecvFile) return;
+            const cf = currentRecvFile;
+            currentRecvFile = null; // reset để sẵn sàng file tiếp theo
+
+            // Xác minh SHA-256
+            const blob        = new Blob(cf.chunks);
+            const arrayBuffer = await blob.arrayBuffer();
+            const actual      = await checksumBuffer(arrayBuffer);
+
+            const fileInfo = recvFiles[cf.fileIndex];
+            if (actual !== cf.checksum) {
+                fileInfo.status = 'err';
+                renderRecvList();
+                showStatus('receiverStatus', `❌ File ${cf.name} bị lỗi checksum! Không tải xuống.`, 'err');
                 return;
             }
 
-            // Checksum khớp → an toàn để tải
+            // Checksum khớp → tải xuống ngay (không đợi hết session)
+            fileInfo.status = 'ok';
+            renderRecvList();
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = expectedName;
+            const a   = document.createElement('a');
+            a.href = url; a.download = cf.name;
             document.body.appendChild(a); a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
+            showStatus('receiverStatus', `✅ Đã tải: ${cf.name}`, 'ok');
+        }
+
+        // ── Tất cả file đã gửi xong ──
+        else if (msg.type === 'all_done') {
+            const ok  = recvFiles.filter(f => f.status === 'ok').length;
+            const err = recvFiles.filter(f => f.status === 'err').length;
             setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
-                'receiverChunkInfo', 100, `✅ Đã nhận ${expectedName}`, `${formatBytes(expectedSize)} · ✓ SHA-256`, true);
-            showStatus('receiverStatus', `✅ Tải xuống thành công & đã xác minh toàn vẹn: ${expectedName}`, 'ok');
+                'receiverChunkInfo', 100,
+                `✅ Nhận xong ${ok} file${err > 0 ? ` (${err} lỗi)` : ''}`,
+                formatBytes(recvTotalBytes), true
+            );
+            const msg2 = err > 0
+                ? `⚠️ Nhận xong: ${ok} file thành công, ${err} file lỗi checksum`
+                : `✅ Đã nhận và tải xuống tất cả ${ok} file!`;
+            showStatus('receiverStatus', msg2, err > 0 ? 'warn' : 'ok');
         }
     });
 
     receiverConn.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
 });
 
-// ─── Start ────────────────────────────────────────────────────
+// ── RENDER DANH SÁCH FILE RECEIVER ───────────────────────────────
+function renderRecvList() {
+    const wrap = $('recvQueue');
+    const list = $('recvList');
+    const sumEl = $('recvSummary');
+
+    if (recvFiles.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    const ok  = recvFiles.filter(f => f.status === 'ok').length;
+    sumEl.textContent = `${recvFiles.length} file · ${ok} đã tải`;
+
+    list.innerHTML = '';
+    recvFiles.forEach((f, i) => {
+        const el = document.createElement('div');
+        el.className = `recv-item ${f.status === 'ok' ? 'verified' : f.status === 'err' ? 'bad' : 'receiving'}`;
+        el.id = `ri-${i}`;
+        el.innerHTML = `
+            <span style="font-size:0.9rem">${f.status==='ok'?'✅':f.status==='err'?'❌':'📥'}</span>
+            <span class="r-name" title="${f.name}">${f.name}</span>
+            <span class="r-size">${formatBytes(f.size)}</span>
+            <span class="r-badge ${f.status==='ok'?'ok':f.status==='err'?'err':'cur'}">
+                ${f.status==='ok'?'Đã tải':f.status==='err'?'Lỗi':'Đang nhận'}
+            </span>
+            ${f.status==='receiving' ? `<div class="r-mini-wrap" style="grid-column:1/-1"><div class="r-mini-bar" id="rbar-${i}"></div></div>` : ''}
+        `;
+        list.appendChild(el);
+    });
+}
+
+function updateRecvItemBar(i, pct) {
+    const bar = $(`rbar-${i}`);
+    if (bar) bar.style.width = pct + '%';
+}
+
+// ── START ─────────────────────────────────────────────────────────
 initPeers();
 </script>
 </body>
