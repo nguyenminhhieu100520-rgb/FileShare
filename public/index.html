@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chia sẻ file P2P</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg:         #0d1117;  
+            --surface:    #161b22;  
+            --surface2:   #21262d;  
+            --border:     #30363d;  
+            --blue:       #58a6ff;  
+            --blue-dim:   #1f6feb;  
+            --green:      #3fb950;  
+            --red:        #f85149;  
+            --yellow:     #e3b341;  
+            --text:       #e6edf3;  
+            --text-muted: #8b949e;  
+            --radius:     12px;     
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;          
+            display: flex;              
+            flex-direction: column;     
+            align-items: center;        
+            padding: 30px 20px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;     
+            inset: 0;            
+            background-image:
+                linear-gradient(rgba(88,166,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(88,166,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px; 
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            max-width: 960px;   
+            width: 100%;        
+            position: relative;
+            z-index: 1;         
+        }
+
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;  
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;  
+        }
+
+        .status { display: none; border-radius: var(--radius); padding: 10px 14px; font-size: 0.85rem; line-height: 1.5; }
+        .status.show { display: block; }
+        
+        .status.ok   { background: rgba(63,185,80,0.1);  border: 1px solid rgba(63,185,80,0.3);  color: var(--green); }
+        .status.err  { background: rgba(248,81,73,0.1);  border: 1px solid rgba(248,81,73,0.3);  color: var(--red); }
+        .status.warn { background: rgba(227,179,65,0.1); border: 1px solid rgba(227,179,65,0.3); color: var(--yellow); }
+
+        .progress-wrap { display: none; flex-direction: column; gap: 6px; }
+        .progress-wrap.show { display: flex; }
+        .progress-track { height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); }
+        .progress-bar {
+            height: 100%; width: 0%; border-radius: 99px;
+            
+            transition: width 0.2s;
+            background: linear-gradient(90deg, var(--blue-dim), var(--blue));
+        }
+        .progress-bar.done { background: linear-gradient(90deg, #2ea043, var(--green)); }
+
+        .drop-area {
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 28px 20px; text-align: center; cursor: pointer;
+            transition: all 0.2s; background: var(--surface2);
+        }
+        .drop-area:hover, .drop-area.dragover {
+            border-color: var(--blue);
+            background: rgba(88,166,255,0.05);
+        }
+
+        @media (max-width: 680px) {
+            .grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+        }
+
+        .badge { margin-left: auto; font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; font-family: 'JetBrains Mono', monospace; }
+        .badge-send { background: rgba(88,166,255,0.15); color: var(--blue); }
+        .badge-recv { background: rgba(63,185,80,0.15);  color: var(--green); }
+        .id-row { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+        .id-label { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+        .id-value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--blue); flex: 1; word-break: break-all; }
+        .copy-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 4px 10px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; white-space: nowrap; }
+        .copy-btn:hover { border-color: var(--blue); color: var(--blue); }
+        .file-info { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.3); border-radius: var(--radius); padding: 10px 14px; font-size: 0.85rem; color: var(--green); display: none; }
+        .pin-group { display: flex; flex-direction: column; gap: 6px; }
+        .pin-group label { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .pin-group label .lock { color: var(--yellow); }
+        .pin-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: var(--radius); font-size: 0.95rem; font-family: 'JetBrains Mono', monospace; width: 100%; outline: none; transition: border 0.2s; letter-spacing: 4px; }
+        .pin-input:focus { border-color: var(--yellow); }
+        .input-group { display: flex; gap: 8px; }
+        .input-group input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: var(--radius); font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; outline: none; transition: border 0.2s; }
+        .input-group input:focus { border-color: var(--blue); }
+        .btn { border: none; padding: 11px 18px; border-radius: var(--radius); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s; width: 100%; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { background: var(--blue-dim); color: white; }
+        .btn-primary:not(:disabled):hover { background: var(--blue); }
+        .btn-sm { width: auto; padding: 8px 14px; }
+        .progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); }
+        .chunk-info { font-size: 0.78rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+        header { text-align: center; margin-bottom: 36px; }
+        header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+        header h1 span { color: var(--blue); }
+        header p { margin-top: 8px; color: var(--text-muted); font-size: 0.9rem; }
+        .card-header { display: flex; align-items: center; gap: 10px; }
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; }
+        .drop-area .icon { font-size: 32px; margin-bottom: 8px; }
+        .drop-area p { font-size: 0.875rem; color: var(--text-muted); }
+        .drop-area p strong { color: var(--blue); }
+        footer { margin-top: 28px; text-align: center; color: var(--text-muted); font-size: 0.82rem; }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <header>
+        <h1>☁️ P2P <span>FileShare</span></h1>
+        <p>Truyền file trực tiếp — không qua server, không giới hạn kích thước</p>
+    </header>
+
+    <div class="grid">
+        <div class="card">
+            <div class="card-header">
+                <span style="font-size:1.3rem">📤</span>
+                <h2>Người gửi</h2>
+                <span class="badge badge-send">Tạo phòng</span>
+            </div>
+
+            <div class="id-row">
+                <span class="id-label">Peer ID của bạn:</span>
+                <span class="id-value" id="senderPeerId">Đang kết nối…</span>
+                <button class="copy-btn" id="copySenderBtn" onclick="copyText('senderPeerId')" disabled>Sao chép</button>
+            </div>
+
+            <div class="drop-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
+                <div class="icon">📂</div>
+                <p>Kéo thả file vào đây hoặc <strong>nhấp để chọn</strong></p>
+                <input type="file" id="fileInput" style="display:none">
+            </div>
+            <div class="file-info" id="fileInfoSender"></div>
+
+            <div class="pin-group">
+                <label><span class="lock">🔐</span> Mã PIN bảo mật (người nhận cần nhập đúng)</label>
+                <input type="text" class="pin-input" id="senderPin" maxlength="6" placeholder="••••••" autocomplete="off">
+            </div>
+
+            <button class="btn btn-primary" id="sendBtn" disabled>🚀 Tạo phòng và chờ kết nối</button>
+
+            <div class="progress-wrap" id="senderProgressWrap">
+                <div class="progress-meta">
+                    <span id="senderProgressLabel">Đang gửi…</span>
+                    <span class="chunk-info" id="senderChunkInfo"></span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-bar" id="senderProgressBar"></div>
+                </div>
+            </div>
+            <div class="status" id="senderStatus"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span style="font-size:1.3rem">📥</span>
+                <h2>Người nhận</h2>
+                <span class="badge badge-recv">Kết nối</span>
+            </div>
+
+            <div class="id-row">
+                <span class="id-label">Peer ID của bạn:</span>
+                <span class="id-value" id="receiverPeerId">Đang kết nối…</span>
+                <button class="copy-btn" id="copyReceiverBtn" onclick="copyText('receiverPeerId')" disabled>Sao chép</button>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="targetPeerId" placeholder="Nhập Peer ID của người gửi">
+                <button class="btn btn-primary btn-sm" id="connectBtn" disabled>Kết nối</button>
+            </div>
+
+            <div class="pin-group">
+                <label><span class="lock">🔐</span> Nhập mã PIN từ người gửi</label>
+                <input type="text" class="pin-input" id="receiverPin" maxlength="6" placeholder="••••••" autocomplete="off">
+            </div>
+            <div class="progress-wrap" id="receiverProgressWrap">
+                <div class="progress-meta">
+                    <span id="receiverProgressLabel">Đang nhận…</span>
+                    <span class="chunk-info" id="receiverChunkInfo"></span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-bar" id="receiverProgressBar"></div>
+                </div>
+            </div>
+            <div class="status" id="receiverStatus"></div>
+        </div>
+    </div>
+
+    <footer>⚡ Dữ liệu truyền qua WebRTC — không lưu trên server &nbsp;·&nbsp; Cả hai phải online cùng lúc</footer>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<script>
+const CHUNK_SIZE = 64 * 1024; 
+let senderPeer   = null;  
+let receiverPeer = null;  
+                          
+                          
+                          
+                          
+
+let senderConn   = null;  
+let receiverConn = null;  
+                          
+                          
+
+let fileBuffer = null;  
+let fileName   = '';    
+let fileSize   = 0;     
+
+
+let receivedChunks   = [];  
+let receivedBytes    = 0;   
+let expectedSize     = 0;   
+let expectedName     = '';  
+let expectedChecksum = '';  
+let pinAttempts  = 0;           
+let pinLockUntil = 0;           
+const MAX_PIN_ATTEMPTS = 5;     
+const PIN_LOCK_MS = 30_000;     
+const $ = id => document.getElementById(id);
+function showStatus(id, msg, type = 'ok') {
+    const el = $(id);
+    el.textContent = msg;
+    el.className = `status show ${type}`;
+}
+window.copyText = function(id) {
+    navigator.clipboard.writeText($(id).innerText)
+        .then(() => showStatus('senderStatus', '✅ Đã sao chép ID!', 'ok'))
+        .catch(() => {}); 
+};
+
+
+function formatBytes(b) {
+    if (b < 1024)    return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    return (b / 1048576).toFixed(2) + ' MB';
+}
+
+
+function setProgress(wrapId, barId, labelId, chunkId, pct, label, chunkText, done = false) {
+    $(wrapId).className = 'progress-wrap show'; 
+    const bar = $(barId);
+    bar.style.width = pct + '%';                
+    bar.className = 'progress-bar' + (done ? ' done' : ''); 
+    $(labelId).textContent = label;
+    if (chunkId) $(chunkId).textContent = chunkText;
+}
+
+
+async function hashPin(pin) {
+    const encoded = new TextEncoder().encode(pin);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
+async function checksumBuffer(buffer) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
+async function loadConfig() {
+    try {
+        const res = await fetch('/config');
+        return await res.json();
+    } catch {
+        return { peerHost: 'localhost', peerPort: 9000, peerPath: '/peerjs', secure: false };
+    }
+}
+
+
+async function initPeers() {
+    const cfg = await loadConfig();
+
+    const peerOpts = {
+        host:   cfg.peerHost, 
+        port:   cfg.peerPort,  
+        path:   cfg.peerPath,  
+        secure: cfg.secure,    
+    };
+
+    senderPeer   = new Peer(undefined, peerOpts);
+    receiverPeer = new Peer(undefined, peerOpts);
+
+    senderPeer.on('open', id => {
+        $('senderPeerId').innerText = id;     
+        $('copySenderBtn').disabled = false;   
+        $('sendBtn').disabled = false;         
+    });
+    senderPeer.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
+
+    receiverPeer.on('open', id => {
+        $('receiverPeerId').innerText = id;
+        $('copyReceiverBtn').disabled = false;
+        $('connectBtn').disabled = false;
+    });
+    receiverPeer.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
+
+    senderPeer.on('connection', conn => {
+        senderConn = conn;
+
+
+        let connPinAttempts = 0;
+
+        conn.on('open', () => showStatus('senderStatus', '📞 Người nhận đã kết nối — đang xác thực PIN…', 'warn'));
+
+
+        conn.on('data', async msg => {
+
+            if (msg.type === 'auth') {
+
+                const myPin = $('senderPin').value.trim();
+                if (!myPin) {
+                    conn.send({ type: 'auth_result', ok: false, reason: 'Người gửi chưa đặt PIN' });
+                    return;
+                }
+
+                connPinAttempts++;
+                if (connPinAttempts > MAX_PIN_ATTEMPTS) {
+                    conn.send({ type: 'auth_result', ok: false, reason: 'Quá nhiều lần thử sai — kết nối bị từ chối' });
+                    showStatus('senderStatus', '🚫 Kẻ tấn công đã bị chặn (>5 lần sai PIN)', 'err');
+                    conn.close(); 
+                    return;
+                }
+
+                const myHash = await hashPin(myPin);
+                if (msg.pinHash !== myHash) {
+                    conn.send({ type: 'auth_result', ok: false, reason: `Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})` });
+                    showStatus('senderStatus', `🚫 Sai PIN (${connPinAttempts}/${MAX_PIN_ATTEMPTS})`, 'warn');
+                    return;
+                }
+
+                showStatus('senderStatus', '🔢 Đang tính checksum file…', 'warn');
+                const checksum = await checksumBuffer(fileBuffer);
+                conn.send({ type: 'auth_result', ok: true });
+                showStatus('senderStatus', '✅ Xác thực PIN thành công — đang gửi file…', 'ok');
+
+                if (fileBuffer) {
+                    sendFileChunked(conn, checksum);
+                } else {
+                    showStatus('senderStatus', '⚠️ Bạn chưa chọn file!', 'warn');
+                }
+            }
+        });
+
+        conn.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
+    });
+}
+
+$('fileInput').addEventListener('change', e => {
+    if (e.target.files[0]) processFile(e.target.files[0]);
+});
+
+const dropArea = $('dropArea');
+dropArea.addEventListener('dragover', e => {
+    e.preventDefault(); 
+    dropArea.classList.add('dragover'); 
+});
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+});
+
+
+function processFile(file) {
+    fileName = file.name;
+    fileSize = file.size;
+    const info = $('fileInfoSender');
+    info.style.display = 'block';
+    info.textContent = `📄 ${fileName} — ${formatBytes(fileSize)}`;
+    showStatus('senderStatus', `📁 Đã chọn: ${fileName}`, 'ok');
+
+    const reader = new FileReader();
+    reader.onload = e => { fileBuffer = e.target.result; };
+    reader.readAsArrayBuffer(file);
+}
+
+$('sendBtn').addEventListener('click', () => {
+    if (!fileBuffer) { showStatus('senderStatus', '⚠️ Chưa chọn file!', 'warn'); return; }
+    if (!$('senderPin').value.trim()) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN!', 'warn'); return; }
+    showStatus('senderStatus', '⏳ Đang chờ người nhận kết nối…', 'warn');
+});
+
+function sendFileChunked(conn, checksum) {
+    const totalChunks = Math.ceil(fileBuffer.byteLength / CHUNK_SIZE);
+
+    conn.send({ type: 'file_header', fileName, fileSize: fileBuffer.byteLength, totalChunks, checksum });
+
+    let i = 0; 
+
+    function sendNext() {
+        if (i >= totalChunks) {
+            conn.send({ type: 'file_done' });
+            setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+                'senderChunkInfo', 100, `✅ Đã gửi ${fileName}`, `${totalChunks}/${totalChunks} chunks`, true);
+            showStatus('senderStatus', `✅ Gửi thành công: ${fileName}`, 'ok');
+            return;
+        }
+
+        const start = i * CHUNK_SIZE;
+        const end   = Math.min(start + CHUNK_SIZE, fileBuffer.byteLength); 
+
+        conn.send({ type: 'file_chunk', index: i, data: fileBuffer.slice(start, end) });
+
+        const pct = Math.round((i + 1) / totalChunks * 100);
+        setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+            'senderChunkInfo', pct, `📤 Đang gửi… ${pct}%`,
+            `chunk ${i + 1}/${totalChunks} · ${formatBytes(end)}/${formatBytes(fileBuffer.byteLength)}`);
+
+        i++;
+
+        setTimeout(sendNext, 10);
+    }
+
+    sendNext(); 
+}
+
+$('connectBtn').addEventListener('click', async () => {
+    const targetId = $('targetPeerId').value.trim();
+    if (!targetId) { showStatus('receiverStatus', '⚠️ Nhập Peer ID người gửi!', 'warn'); return; }
+    const pin = $('receiverPin').value.trim();
+    if (!pin) { showStatus('receiverStatus', '⚠️ Nhập mã PIN!', 'warn'); return; }
+
+    if (Date.now() < pinLockUntil) {
+        const wait = Math.ceil((pinLockUntil - Date.now()) / 1000); 
+        showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s do nhập sai quá nhiều lần`, 'err');
+        return;
+    }
+
+    showStatus('receiverStatus', '⏳ Đang kết nối…', 'warn');
+
+    receiverConn = receiverPeer.connect(targetId, { reliable: true });
+
+    receiverConn.on('open', async () => {
+        showStatus('receiverStatus', '🔐 Đang xác thực PIN…', 'warn');
+
+        const pinHash = await hashPin(pin);
+        receiverConn.send({ type: 'auth', pinHash });
+    });
+
+    receiverConn.on('data', async msg => {
+
+        if (msg.type === 'auth_result') {
+            if (!msg.ok) {
+                pinAttempts++;
+                if (pinAttempts >= MAX_PIN_ATTEMPTS) {
+
+                    pinLockUntil = Date.now() + PIN_LOCK_MS;
+                    pinAttempts  = 0; 
+                    showStatus('receiverStatus', `🔒 Khoá 30s do sai PIN ${MAX_PIN_ATTEMPTS} lần liên tiếp`, 'err');
+                } else {
+                    showStatus('receiverStatus', `🚫 ${msg.reason}`, 'err');
+                }
+                receiverConn.close();
+                return;
+            }
+            pinAttempts = 0; 
+            showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
+            receivedChunks = [];
+            receivedBytes  = 0;
+        }
+
+
+        else if (msg.type === 'file_header') {
+            expectedName     = msg.fileName;
+            expectedSize     = msg.fileSize;
+            expectedChecksum = msg.checksum; 
+            receivedChunks   = new Array(msg.totalChunks);
+            receivedBytes    = 0;
+            showStatus('receiverStatus', `📥 Đang nhận: ${expectedName} (${formatBytes(expectedSize)})`, 'ok');
+        }
+
+        else if (msg.type === 'file_chunk') {
+            receivedChunks[msg.index] = msg.data;
+            receivedBytes += msg.data.byteLength;
+
+            const pct = Math.round(receivedBytes / expectedSize * 100);
+            setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
+                'receiverChunkInfo', pct, `📥 Đang nhận… ${pct}%`,
+                `${formatBytes(receivedBytes)} / ${formatBytes(expectedSize)}`);
+        }
+
+        else if (msg.type === 'file_done') {
+
+            showStatus('receiverStatus', '🔢 Đang xác minh tính toàn vẹn file…', 'warn');
+            const blob        = new Blob(receivedChunks);
+            const arrayBuffer = await blob.arrayBuffer(); 
+            const actualChecksum = await checksumBuffer(arrayBuffer);
+
+            if (actualChecksum !== expectedChecksum) {
+                showStatus('receiverStatus', '❌ File bị lỗi hoặc giả mạo! Checksum không khớp — huỷ tải xuống.', 'err');
+                return;
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a   = document.createElement('a');
+            a.href     = url;
+            a.download = expectedName; 
+            document.body.appendChild(a);
+            a.click(); 
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
+                'receiverChunkInfo', 100, `✅ Đã nhận ${expectedName}`, `${formatBytes(expectedSize)} · ✓ SHA-256`, true);
+            showStatus('receiverStatus', `✅ Tải xuống thành công & đã xác minh toàn vẹn: ${expectedName}`, 'ok');
+        }
+    });
+
+    receiverConn.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
+});
+
+initPeers();
+</script>
+</body>
+</html>
