@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chia sẻ file P2P - Xanh da trời</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #a0c4ff, #cfe3ff); /* xanh da trời nhạt */
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 51, 102, 0.3);
+            overflow: hidden;
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #004080; /* xanh đậm */
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #0066cc;
+            margin-bottom: 30px;
+            font-size: 1rem;
+            background: #e6f0ff;
+            padding: 8px 15px;
+            border-radius: 50px;
+            display: inline-block;
+            margin-left: auto;
+            margin-right: auto;
+            width: fit-content;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .card {
+            background: #f0f8ff; /* xanh nhạt hơn */
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 64, 128, 0.2);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #003366;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .badge {
+            background: #3399ff;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 12px 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #b8d9ff;
+        }
+
+        .peer-id {
+            font-family: monospace;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #003366;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: #cce4ff;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #99c2ff;
+        }
+
+        .file-area {
+            border: 2px dashed #66a3ff;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: border 0.3s;
+            margin-bottom: 15px;
+        }
+
+        .file-area:hover {
+            border-color: #004d99;
+        }
+
+        .file-area.dragover {
+            border-color: #28a745;
+            background: #e6f7ff;
+        }
+
+        .file-icon {
+            font-size: 40px;
+            color: #3399ff;
+            margin-bottom: 10px;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #004080;
+            background: #e6f0ff;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #004d99;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            background: #99c2ff;
+            cursor: not-allowed;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #99c2ff;
+            border-radius: 12px;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .input-group input:focus {
+            border-color: #0066cc;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 12px;
+            background: #fff3cd;
+            color: #856404;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .progress {
+            margin-top: 20px;
+            height: 20px;
+            background: #cce4ff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #28a745;
+            width: 0%;
+            transition: width 0.3s;
+            color: white;
+            font-size: 0.75rem;
+            line-height: 20px;
+            text-align: center;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #336699;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>☁️ Chia sẻ file P2P</h1>
+        <div class="subtitle">🔵 Kết nối trực tiếp, an toàn, miễn phí</div>
+
+        <div class="grid">
+            <!-- Người gửi -->
+            <div class="card">
+                <h2>📤 Người gửi <span class="badge">Tạo phòng</span></h2>
+                <div class="info-row">
+                    <span>ID của bạn:</span>
+                    <span class="peer-id" id="senderPeerId">Đang tạo...</span>
+                    <button class="copy-btn" id="copySenderId" onclick="copyPeerId('senderPeerId')" disabled>Sao chép</button>
+                </div>
+                <div class="file-area" id="dropAreaSender" onclick="document.getElementById('fileInput').click()">
+                    <div class="file-icon">📂</div>
+                    <p>Kéo thả file vào đây hoặc <strong>nhấp để chọn</strong></p>
+                    <input type="file" id="fileInput" style="display: none;">
+                </div>
+                <div id="fileInfoSender" class="file-info" style="display: none;"></div>
+                <button id="sendBtn" disabled>🚀 Tạo phòng và chờ kết nối</button>
+                <div id="senderStatus" class="status"></div>
+            </div>
+
+            <!-- Người nhận -->
+            <div class="card">
+                <h2>📥 Người nhận <span class="badge">Kết nối</span></h2>
+                <div class="info-row">
+                    <span>ID của bạn:</span>
+                    <span class="peer-id" id="receiverPeerId">Đang tạo...</span>
+                    <button class="copy-btn" id="copyReceiverId" onclick="copyPeerId('receiverPeerId')" disabled>Sao chép</button>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="receiverPeerIdInput" placeholder="Nhập ID người gửi">
+                    <button id="connectBtn" disabled>🔌 Kết nối</button>
+                </div>
+                <div id="receiverStatus" class="status"></div>
+                <div class="progress" id="receiverProgress" style="display: none;">
+                    <div class="progress-bar" id="receiverProgressBar">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            ⚡ Dữ liệu truyền trực tiếp, không lưu trên server. Cả hai phải online.
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script>
+        // --- Cấu hình PeerJS ---
+        const peer = new Peer(undefined, {
+            host: 'localhost',
+            port: 9000,
+            path: '/'   // đồng bộ với signaling server
+        });
+
+        let conn;
+        let fileData = null;
+        let fileName = '';
+        let fileSize = 0;
+        let peerId = null;
+
+        // DOM elements
+        const senderPeerIdSpan = document.getElementById('senderPeerId');
+        const receiverPeerIdSpan = document.getElementById('receiverPeerId');
+        const copySenderBtn = document.getElementById('copySenderId');
+        const copyReceiverBtn = document.getElementById('copyReceiverId');
+        const fileInput = document.getElementById('fileInput');
+        const dropArea = document.getElementById('dropAreaSender');
+        const fileInfoSender = document.getElementById('fileInfoSender');
+        const sendBtn = document.getElementById('sendBtn');
+        const receiverPeerIdInput = document.getElementById('receiverPeerIdInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const senderStatus = document.getElementById('senderStatus');
+        const receiverStatus = document.getElementById('receiverStatus');
+        const receiverProgress = document.getElementById('receiverProgress');
+        const receiverProgressBar = document.getElementById('receiverProgressBar');
+
+        function showStatus(element, message, isSuccess = true) {
+            element.textContent = message;
+            element.className = 'status show';
+            element.style.backgroundColor = isSuccess ? '#d4edda' : '#f8d7da';
+            element.style.color = isSuccess ? '#155724' : '#721c24';
+        }
+
+        window.copyPeerId = function(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Đã sao chép ID!');
+            });
+        };
+
+        peer.on('open', (id) => {
+            peerId = id;
+            senderPeerIdSpan.innerText = id;
+            receiverPeerIdSpan.innerText = id;
+            copySenderBtn.disabled = false;
+            copyReceiverBtn.disabled = false;
+            sendBtn.disabled = false;
+            connectBtn.disabled = false;
+            showStatus(senderStatus, '✅ Đã sẵn sàng.', true);
+        });
+
+        peer.on('error', (err) => {
+            console.error('Peer error:', err);
+            showStatus(senderStatus, '❌ Lỗi kết nối: ' + err.message, false);
+        });
+
+        peer.on('connection', (incomingConn) => {
+            conn = incomingConn;
+            showStatus(senderStatus, '📞 Người nhận đã kết nối!', true);
+            conn.on('data', (data) => {
+                console.log('Nhận từ receiver:', data);
+            });
+            conn.on('open', () => {
+                if (fileData) {
+                    sendFile();
+                } else {
+                    showStatus(senderStatus, '⚠️ Bạn chưa chọn file.', false);
+                }
+            });
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('dragover');
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect({ target: { files: files } });
+            }
+        });
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            fileName = file.name;
+            fileSize = file.size;
+            fileInfoSender.style.display = 'block';
+            fileInfoSender.innerHTML = `📄 <strong>${fileName}</strong> (${(fileSize / 1024 / 1024).toFixed(2)} MB)`;
+            showStatus(senderStatus, `📁 Đã chọn file: ${fileName}`, true);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                fileData = event.target.result;
+                showStatus(senderStatus, '✅ File đã sẵn sàng.', true);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        sendBtn.addEventListener('click', () => {
+            if (!fileData) {
+                showStatus(senderStatus, '⚠️ Vui lòng chọn file trước.', false);
+                return;
+            }
+            showStatus(senderStatus, '⏳ Đang chờ người nhận kết nối...', true);
+        });
+
+        connectBtn.addEventListener('click', () => {
+            const remoteId = receiverPeerIdInput.value.trim();
+            if (!remoteId) {
+                showStatus(receiverStatus, '⚠️ Vui lòng nhập ID.', false);
+                return;
+            }
+            showStatus(receiverStatus, '⏳ Đang kết nối...', true);
+            conn = peer.connect(remoteId);
+            conn.on('open', () => {
+                showStatus(receiverStatus, '✅ Kết nối thành công! Đang chờ file...', true);
+            });
+            conn.on('data', (data) => {
+                if (data && data.fileName && data.fileData) {
+                    const receivedFile = data;
+                    showStatus(receiverStatus, `📥 Đang nhận file: ${receivedFile.fileName}...`, true);
+                    receiverProgress.style.display = 'block';
+                    receiverProgressBar.style.width = '0%';
+                    receiverProgressBar.innerText = '0%';
+                    setTimeout(() => {
+                        receiverProgressBar.style.width = '100%';
+                        receiverProgressBar.innerText = '100%';
+                    }, 100);
+                    const blob = new Blob([receivedFile.fileData]);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = receivedFile.fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showStatus(receiverStatus, `✅ Đã nhận và tải file ${receivedFile.fileName} thành công!`, true);
+                }
+            });
+            conn.on('error', (err) => {
+                showStatus(receiverStatus, '❌ Lỗi kết nối: ' + err, false);
+            });
+        });
+
+        function sendFile() {
+            if (conn && conn.open) {
+                showStatus(senderStatus, `📤 Đang gửi file: ${fileName}...`, true);
+                conn.send({
+                    fileName: fileName,
+                    fileData: fileData
+                });
+                showStatus(senderStatus, `✅ Đã gửi file ${fileName} thành công!`, true);
+            } else {
+                showStatus(senderStatus, '❌ Mất kết nối.', false);
+            }
+        }
+    </script>
+</body>
+</html>
