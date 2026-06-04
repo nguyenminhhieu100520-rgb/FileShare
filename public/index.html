@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P FileShare — Multi-file</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #21262d;
+            --border: #30363d;
+            --blue: #58a6ff;
+            --blue-dim: #1f6feb;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #e3b341;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            max-width: 880px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        header h1 span {
+            color: var(--blue);
+        }
+
+        header p {
+            margin-top: 8px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 0;
+            /* ngăn card phình ra ngoài cột grid */
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .badge {
+            margin-left: auto;
+            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge-send {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+        }
+
+        .badge-recv {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+        }
+
+        /* ID row */
+        .id-row {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .id-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .id-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--blue);
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        /* ── Drop area ── */
+        .drop-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--surface2);
+            position: relative;
+        }
+
+        .drop-area:hover,
+        .drop-area.dragover {
+            border-color: var(--blue);
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        .drop-area .icon {
+            font-size: 28px;
+            margin-bottom: 6px;
+        }
+
+        .drop-area p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .drop-area p strong {
+            color: var(--blue);
+        }
+
+        .drop-area p.hint {
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+
+        /* ── File queue (MULTI-FILE) ── */
+        /*
+         * THAY ĐỔI CHÍNH so với bản cũ:
+         * Thay vì .file-info (1 dòng text), giờ dùng .file-queue — danh sách
+         * các file sẽ gửi. Mỗi file là 1 .queue-item có thể xóa riêng lẻ.
+         */
+        .file-queue {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        /* Header của queue: "3 file · 12.4 MB" + nút Xóa hết */
+        .queue-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            padding: 0 2px;
+        }
+
+        .queue-clear-btn {
+            background: none;
+            border: none;
+            color: var(--red);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-family: 'Sora', sans-serif;
+            transition: background 0.15s;
+        }
+
+        .queue-clear-btn:hover {
+            background: rgba(248, 81, 73, 0.12);
+        }
+
+        /* Mỗi dòng trong queue */
+        .queue-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            transition: border-color 0.15s;
+        }
+
+        /* Trạng thái file: pending / sending / done / error */
+        .queue-item.sending {
+            border-color: var(--blue);
+        }
+
+        .queue-item.done {
+            border-color: var(--green);
+            opacity: 0.7;
+        }
+
+        .queue-item.error {
+            border-color: var(--red);
+        }
+
+        .queue-item .q-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .queue-item .q-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+
+        .queue-item .q-size {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .queue-item .q-status {
+            font-size: 0.72rem;
+            white-space: nowrap;
+        }
+
+        .queue-item .q-del {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            line-height: 1;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+
+        .queue-item .q-del:hover {
+            color: var(--red);
+        }
+
+        /* Mini progress bar bên trong mỗi queue-item khi đang gửi */
+        .q-mini-bar-wrap {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 99px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .q-mini-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--blue);
+            border-radius: 99px;
+            transition: width 0.15s;
+        }
+
+        .queue-item.done .q-mini-bar {
+            background: var(--green);
+            width: 100%;
+        }
+
+        /* PIN */
+        .pin-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .pin-group label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pin-group label .lock {
+            color: var(--yellow);
+        }
+
+        .pin-input {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            font-family: 'JetBrains Mono', monospace;
+            width: 100%;
+            outline: none;
+            transition: border 0.2s;
+            letter-spacing: 4px;
+        }
+
+        .pin-input:focus {
+            border-color: var(--yellow);
+        }
+
+        /* Input group */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group input {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .input-group input::placeholder {
+            color: var(--text-muted);
+            letter-spacing: 0;
+            font-family: 'Sora', sans-serif;
+        }
+
+        .input-group input:focus {
+            border-color: var(--blue);
+        }
+
+        /* Buttons */
+        .btn {
+            border: none;
+            padding: 11px 18px;
+            border-radius: var(--radius);
+            font-size: 0.9rem;
+            font-weight: 600;
+            font-family: 'Sora', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+            width: 100%;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--blue-dim);
+            color: white;
+        }
+
+        .btn-primary:not(:disabled):hover {
+            background: var(--blue);
+        }
+
+        .btn-sm {
+            width: auto;
+            padding: 8px 14px;
+        }
+
+        /* Status */
+        .status {
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            display: none;
+            line-height: 1.5;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.ok {
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            color: var(--green);
+        }
+
+        .status.err {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            color: var(--red);
+        }
+
+        .status.warn {
+            background: rgba(227, 179, 65, 0.1);
+            border: 1px solid rgba(227, 179, 65, 0.3);
+            color: var(--yellow);
+        }
+
+        /* Progress tổng (overall) */
+        .progress-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .progress-wrap.show {
+            display: flex;
+        }
+
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .progress-track {
+            height: 8px;
+            background: var(--surface2);
+            border-radius: 99px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 99px;
+            transition: width 0.2s;
+            background: linear-gradient(90deg, var(--blue-dim), var(--blue));
+        }
+
+        .progress-bar.done {
+            background: linear-gradient(90deg, #2ea043, var(--green));
+        }
+
+        .chunk-info {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Receiver file list */
+        .recv-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .recv-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
+
+        .recv-item.receiving {
+            border-color: var(--blue);
+        }
+
+        .recv-item.verified {
+            border-color: var(--green);
+        }
+
+        .recv-item.bad {
+            border-color: var(--red);
+        }
+
+        .recv-item .r-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .recv-item .r-size {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .recv-item .r-badge {
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        .r-badge.ok {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+        }
+
+        .r-badge.err {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--red);
+        }
+
+        .r-badge.cur {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+        }
+
+        .r-mini-wrap {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 99px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .r-mini-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--blue);
+            border-radius: 99px;
+            transition: width 0.15s;
+        }
+
+        footer {
+            margin-top: 28px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+
+        /* ── Share link box ── */
+        .share-box {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .share-box.show {
+            display: flex;
+        }
+
+        .share-link-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .share-link-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--blue);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .share-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .share-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .share-btn:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .share-hint {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── QR overlay ── */
+        .qr-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-overlay.show {
+            display: flex;
+        }
+
+        .qr-modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            max-width: 320px;
+            width: 90%;
+        }
+
+        .qr-modal h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .qr-modal p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .qr-close {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 24px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }
+
+        .qr-close:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        /* ── Auto-fill badge (receiver) ── */
+        .autofill-badge {
+            display: none;
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            white-space: nowrap;
+        }
+
+        @media (max-width: 680px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+
+        <!-- Banner tự động hiện khi mở từ share link -->
+        <div id="receiverBanner"
+            style="display:none; background:rgba(63,185,80,0.12); border:1px solid rgba(63,185,80,0.4); border-radius:12px; padding:14px 18px; margin-bottom:20px; display:none; align-items:center; gap:12px;">
+            <span style="font-size:1.4rem">📥</span>
+            <div>
+                <div style="font-size:0.95rem; font-weight:600; color:var(--green)">Bạn được mời nhận file!</div>
+                <div style="font-size:0.82rem; color:var(--text-muted); margin-top:2px">Peer ID đã tự điền — cuộn xuống,
+                    nhập PIN rồi nhấn <strong>Kết nối</strong></div>
+            </div>
+            <button onclick="document.getElementById('receiverBanner').style.display='none'"
+                style="margin-left:auto; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; line-height:1">✕</button>
+        </div>
+
+        <header>
+            <h1>☁️ P2P <span>FileShare</span></h1>
+            <p>Truyền nhiều file trực tiếp — không qua server, không giới hạn kích thước</p>
+        </header>
+
+        <!-- Unified Peer ID Section -->
+        <div class="card"
+            style="margin-bottom: 20px; align-items: center; text-align: center; gap: 12px; padding: 18px 24px;">
+            <div
+                style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; width: 100%;">
+                <span class="id-label" style="font-size: 0.9rem; font-weight: 600;">ID Của Bạn:</span>
+                <span class="id-value" id="myPeerId" style="font-size: 1rem; font-weight: 700; color: var(--blue);">Đang
+                    kết nối…</span>
+                <button class="copy-btn" id="copyMyIdBtn" onclick="copyText('myPeerId')"
+                    style="padding: 6px 12px; font-size: 0.85rem;" disabled>Sao chép ID</button>
+            </div>
+
+            <!-- Share link + QR — hiện sau khi có Peer ID -->
+            <div class="share-box" id="shareBox" style="width: 100%; margin-top: 4px;">
+                <div class="share-link-row">
+                    <span class="share-link-text" id="shareLinkText"></span>
+                    <div class="share-actions">
+                        <button class="share-btn" onclick="copyShareLink()">📋 Copy link</button>
+                        <button class="share-btn" onclick="showQR()">⬛ QR</button>
+                    </div>
+                </div>
+                <span class="share-hint">Gửi link này cho người nhận — họ không cần nhập Peer ID thủ công</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- ══ SENDER ═════════════════════════════════════════════ -->
+            <div class="card">
+                <div class="card-header">
+                    <span style="font-size:1.3rem">📤</span>
+                    <h2>Người gửi</h2>
+                    <span class="badge badge-send">Tạo phòng</span>
+                </div>
+
+                <!--
+                THAY ĐỔI 1: Thêm multiple vào input → cho phép chọn nhiều file.
+                Drag & drop cũng nhận e.dataTransfer.files (FileList, nhiều file).
+            -->
+                <div class="drop-area" id="dropArea" onclick="document.getElementById('fileInput').click()">
+                    <div class="icon">📂</div>
+                    <p>Kéo thả file vào đây hoặc <strong>nhấp để chọn</strong></p>
+                    <p class="hint">Hỗ trợ chọn nhiều file cùng lúc</p>
+                    <input type="file" id="fileInput" style="display:none" multiple>
+                </div>
+
+                <!--
+                THAY ĐỔI 2: Thay .file-info (1 dòng) bằng .file-queue (danh sách).
+                JavaScript sẽ render từng .queue-item vào đây.
+            -->
+                <div id="fileQueue" style="display:none">
+                    <div class="queue-header">
+                        <span id="queueSummary"></span>
+                        <button class="queue-clear-btn" onclick="clearQueue()">✕ Xóa hết</button>
+                    </div>
+                    <div class="file-queue" id="queueList"></div>
+                </div>
+
+                <div class="pin-group">
+                    <label><span class="lock">🔐</span> Mã PIN bảo mật</label>
+                    <input type="password" class="pin-input" id="senderPin" maxlength="6" placeholder="••••••"
+                        autocomplete="off">
+                </div>
+
+                <button class="btn btn-primary" id="sendBtn" disabled>🚀 Tạo phòng và chờ kết nối</button>
+
+                <!-- Progress tổng — hiện khi đang gửi -->
+                <div class="progress-wrap" id="senderProgressWrap">
+                    <div class="progress-meta">
+                        <span id="senderProgressLabel">Đang gửi…</span>
+                        <span class="chunk-info" id="senderChunkInfo"></span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="senderProgressBar"></div>
+                    </div>
+                </div>
+                <div class="status" id="senderStatus"></div>
+            </div>
+
+            <!-- ══ RECEIVER ═══════════════════════════════════════════ -->
+            <div class="card">
+                <div class="card-header">
+                    <span style="font-size:1.3rem">📥</span>
+                    <h2>Người nhận</h2>
+                    <span class="badge badge-recv">Kết nối</span>
+                </div>
+
+                <div class="input-group">
+                    <input type="text" id="targetPeerId" placeholder="Nhập Peer ID người gửi">
+                    <span class="autofill-badge" id="autofillBadge">✓ Tự điền từ link</span>
+                    <button class="btn btn-primary btn-sm" id="connectBtn" disabled>Kết nối</button>
+                </div>
+
+                <div class="pin-group">
+                    <label><span class="lock">🔐</span> Nhập mã PIN từ người gửi</label>
+                    <input type="password" class="pin-input" id="receiverPin" maxlength="6" placeholder="••••••"
+                        autocomplete="off">
+                </div>
+
+                <!-- Progress tổng phía receiver -->
+                <div class="progress-wrap" id="receiverProgressWrap">
+                    <div class="progress-meta">
+                        <span id="receiverProgressLabel">Đang nhận…</span>
+                        <span class="chunk-info" id="receiverChunkInfo"></span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="receiverProgressBar"></div>
+                    </div>
+                </div>
+
+                <!-- Danh sách file đã nhận -->
+                <div id="recvQueue" style="display:none">
+                    <div class="queue-header">
+                        <span id="recvSummary" style="font-size:0.78rem;color:var(--text-muted)"></span>
+                    </div>
+                    <div class="recv-list" id="recvList"></div>
+                </div>
+
+                <div class="status" id="receiverStatus"></div>
+            </div>
+        </div>
+
+        <footer>⚡ Dữ liệu truyền qua WebRTC — không lưu trên server &nbsp;·&nbsp; Cả hai phải online cùng lúc</footer>
+    </div>
+
+    <!-- QR Code overlay -->
+    <div class="qr-overlay" id="qrOverlay" onclick="hideQR(event)">
+        <div class="qr-modal">
+            <h3>⬛ Quét để kết nối</h3>
+            <div id="qrContainer" style="border-radius:8px;line-height:0"></div>
+            <p>Người nhận quét QR này bằng điện thoại<br>sẽ được tự động điền Peer ID</p>
+            <button class="qr-close" onclick="hideQR()">Đóng</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"
+        integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU"
+        crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"
+        integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR"
+        crossorigin="anonymous"></script>
+    <script>
+        // ════════════════════════════════════════════════════════════════
+        //  MULTI-FILE P2P FILESHARE (OPTIMIZED)
+        // ════════════════════════════════════════════════════════════════
+
+        // ── ADAPTIVE CHUNK SIZE (AIMD) ────────────────────────────────────
+        const adaptiveChunk = {
+            size: 64 * 1024,   // kích thước hiện tại, bắt đầu 64KB
+            min: 16 * 1024,   // sàn 16KB
+            max: 256 * 1024,   // trần 256KB
+            step: 8 * 1024,   // bước tăng mỗi lần ổn định
+        };
+
+        // Ngưỡng bufferedAmount của DataChannel
+        const BUFFER_HIGH = 512 * 1024;  // > 512KB → giảm chunk, đợi
+        const BUFFER_LOW = 128 * 1024;  // < 128KB → an toàn tăng chunk
+
+        // Speed meter state
+        const speedMeter = {
+            bytes: 0,
+            windowStart: 0,
+            lastKBps: 0,
+        };
+
+        // ── STATE SENDER ─────────────────────────────────────────────────
+        let fileQueue = [];
+        let isSending = false; // đang gửi → không cho thêm/xóa
+        let senderConn = null;
+
+        // Bản đồ theo dõi bruteforce PIN trên Sender (peerId -> { count, lockUntil })
+        const pinAttemptsMap = new Map();
+        const MAX_PIN_ATTEMPTS = 5;
+        const PIN_LOCK_MS = 30000;
+
+        // Cơ chế khóa toàn cục (Global Lock) chống xoay vòng Peer ID
+        let globalLockUntil = 0;
+        let globalFailCount = 0;
+
+        // ── STATE RECEIVER ───────────────────────────────────────────────
+        let receiverConn = null;
+        let currentRecvFile = null; // { chunks[], receivedBytes, expectedSize, name, totalChunks, fileIndex, encrypted }
+        let recvFiles = [];   // [{ name, size, status: 'ok'|'err' }]
+
+        // Hàng đợi decrypt tuần tự để tránh tranh chấp bộ nhớ/thứ tự chunk
+        let _chunkQueue = Promise.resolve();
+        function enqueueChunk(fn) {
+            _chunkQueue = _chunkQueue.then(fn).catch(() => { });
+        }
+
+        let recvTotalBytes = 0;
+        let recvExpectedTotal = 0;
+
+        // Rate limit PIN ở phía Receiver (local UI lock)
+        let pinAttempts = 0;
+        let pinLockUntil = 0;
+
+        let peer = null; // Thực thể PeerJS duy nhất
+
+        const $ = id => document.getElementById(id);
+
+        // ── SHARE LINK & QR ───────────────────────────────────────────────
+        function buildShareLink(peerId) {
+            const encoded = btoa(peerId); // base64 encode
+            return `${location.origin}${location.pathname}?p=${encoded}`;
+        }
+
+        function showShareBox(peerId) {
+            const link = buildShareLink(peerId);
+            $('shareLinkText').textContent = link;
+            $('shareBox').classList.add('show');
+        }
+
+        function copyShareLink() {
+            const link = $('shareLinkText').textContent;
+            navigator.clipboard.writeText(link)
+                .then(() => showStatus('senderStatus', '✅ Đã copy link! Gửi cho người nhận.', 'ok'))
+                .catch(() => showStatus('senderStatus', '⚠️ Không copy được, hãy copy thủ công.', 'warn'));
+        }
+
+        // QR Code
+        function showQR() {
+            const link = $('shareLinkText').textContent;
+            if (!link) return;
+
+            const container = $('qrContainer');
+            container.innerHTML = '';
+
+            new QRCode(container, {
+                text: link,
+                width: 240,
+                height: 240,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            container.style.background = '#ffffff';
+            container.style.padding = '12px';
+
+            $('qrOverlay').classList.add('show');
+        }
+
+        function hideQR(e) {
+            if (e && e.currentTarget === $('qrOverlay') && e.target !== $('qrOverlay')) return;
+            $('qrOverlay').classList.remove('show');
+        }
+
+        // ── AUTO-FILL PEER ID TỪ URL PARAM ───────────────────────────────
+        function autoFillFromURL() {
+            const params = new URLSearchParams(location.search);
+            const encoded = params.get('p');
+            if (!encoded) return;
+            try {
+                const peerId = atob(encoded);
+                const input = $('targetPeerId');
+                const badge = $('autofillBadge');
+                const card = input.closest('.card');
+
+                input.value = peerId;
+                badge.style.display = 'inline-block';
+
+                const banner = $('receiverBanner');
+                if (banner) banner.style.display = 'flex';
+
+                input.style.borderColor = 'var(--green)';
+                input.style.boxShadow = '0 0 0 2px rgba(63,185,80,0.25)';
+
+                if (card) {
+                    card.style.borderColor = 'var(--green)';
+                    card.style.boxShadow = '0 0 0 3px rgba(63,185,80,0.15)';
+                }
+
+                setTimeout(() => {
+                    card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => $('receiverPin')?.focus(), 400);
+                }, 300);
+
+            } catch (e) {
+                // Lỗi parse base64 -> bỏ qua
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', autoFillFromURL);
+
+        // ── HELPERS ───────────────────────────────────────────────────────
+        function showStatus(id, msg, type = 'ok') {
+            const el = $(id);
+            el.textContent = msg;
+            el.className = `status show ${type}`;
+        }
+
+        window.copyText = id => {
+            let text = $(id).innerText;
+            if ($(id).tagName === 'INPUT') {
+                text = $(id).value;
+            }
+            return navigator.clipboard.writeText(text)
+                .then(() => {
+                    showStatus('senderStatus', '✅ Đã sao chép ID!', 'ok');
+                    showStatus('receiverStatus', '✅ Đã sao chép ID!', 'ok');
+                })
+                .catch(() => { });
+        };
+
+        function formatBytes(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+            return (b / 1048576).toFixed(2) + ' MB';
+        }
+
+        function setProgress(wrapId, barId, labelId, chunkId, pct, label, extra, done = false) {
+            $(wrapId).className = 'progress-wrap show';
+            const bar = $(barId);
+            bar.style.width = pct + '%';
+            bar.className = 'progress-bar' + (done ? ' done' : '');
+            $(labelId).textContent = label;
+            if (chunkId) $(chunkId).textContent = extra;
+        }
+
+        // Escape HTML để ngăn XSS khi render tên file vào innerHTML
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        async function hashPin(pin) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Sinh thách thức ngẫu nhiên bảo mật (challenge)
+        function generateRandomChallenge() {
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Tính toán phản hồi thử thách: SHA-256(pinHash + challenge)
+        async function computeChallengeResponse(pin, challenge) {
+            const pinHash = await hashPin(pin);
+            const msgBuffer = new TextEncoder().encode(pinHash + challenge);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // ── AES-GCM ENCRYPTION ────────────────────────────────────────────
+        const AES_PBKDF2_ITER = 200_000;
+
+        let _aesKeyCache = null; // { pin, saltHex, key }
+
+        async function deriveAESKey(pin, saltHex) {
+            if (_aesKeyCache && _aesKeyCache.pin === pin && _aesKeyCache.saltHex === saltHex) return _aesKeyCache.key;
+
+            const salt = new TextEncoder().encode(saltHex);
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                new TextEncoder().encode(pin),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: salt, iterations: AES_PBKDF2_ITER, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+            _aesKeyCache = { pin, saltHex, key };
+            return key;
+        }
+
+        async function encryptChunk(pin, plaintext, saltHex) {
+            const key = await deriveAESKey(pin, saltHex);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const ciphertext = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv },
+                key,
+                plaintext
+            );
+            const out = new Uint8Array(12 + ciphertext.byteLength);
+            out.set(iv, 0);
+            out.set(new Uint8Array(ciphertext), 12);
+            return out.buffer;
+        }
+
+        async function decryptChunk(pin, encrypted, saltHex) {
+            const key = await deriveAESKey(pin, saltHex);
+            const iv = encrypted.slice(0, 12);
+            const ciphertext = encrypted.slice(12);
+            return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+        }
+
+        function clearAESKeyCache() { _aesKeyCache = null; }
+
+        async function loadConfig() {
+            try { const r = await fetch('/config'); return await r.json(); }
+            catch { return { peerHost: 'localhost', peerPort: 9000, peerPath: '/peerjs', secure: false }; }
+        }
+
+        // ── QUEUE UI ──────────────────────────────────────────────────────
+        function renderQueue() {
+            const wrap = $('fileQueue');
+            const list = $('queueList');
+            const summary = $('queueSummary');
+
+            if (fileQueue.length === 0) { wrap.style.display = 'none'; return; }
+            wrap.style.display = 'block';
+
+            const totalSize = fileQueue.reduce((s, f) => s + f.size, 0);
+            summary.textContent = `${fileQueue.length} file · ${formatBytes(totalSize)}`;
+
+            list.innerHTML = '';
+            fileQueue.forEach((f, i) => {
+                const icons = { pending: '📄', sending: '📤', done: '✅', error: '❌' };
+                const statusText = { pending: 'Chờ', sending: 'Đang gửi', done: 'Xong', error: 'Lỗi' };
+                const el = document.createElement('div');
+                el.className = `queue-item ${f.status !== 'pending' ? f.status : ''}`;
+                el.id = `qi-${i}`;
+                const safeName = escapeHtml(f.name);
+                el.innerHTML = `
+            <span class="q-icon">${icons[f.status] || '📄'}</span>
+            <span class="q-name" title="${safeName}">${safeName}</span>
+            <span class="q-size">${formatBytes(f.size)}</span>
+            <span class="q-status" style="color:${f.status === 'done' ? 'var(--green)' : f.status === 'error' ? 'var(--red)' : f.status === 'sending' ? 'var(--blue)' : 'var(--text-muted)'}">${statusText[f.status] || 'Chờ'}</span>
+            ${!isSending ? `<button class="q-del" onclick="removeFromQueue(${i})" title="Xóa">✕</button>` : ''}
+            ${f.status === 'sending' ? `<div class="q-mini-bar-wrap" style="grid-column:1/-1"><div class="q-mini-bar" id="qbar-${i}"></div></div>` : ''}
+        `;
+                if (f.status === 'done') {
+                    const bar = el.querySelector('.q-mini-bar');
+                    if (bar) bar.style.width = '100%';
+                }
+                list.appendChild(el);
+            });
+        }
+
+        function updateQueueItemBar(i, pct) {
+            const bar = $(`qbar-${i}`);
+            if (bar) bar.style.width = pct + '%';
+        }
+
+        window.removeFromQueue = function (i) {
+            if (isSending) return;
+            fileQueue.splice(i, 1);
+            renderQueue();
+            if (fileQueue.length === 0) {
+                $('sendBtn').disabled = true;
+                showStatus('senderStatus', '', 'ok');
+                $('senderStatus').className = 'status';
+            }
+        };
+
+        window.clearQueue = function () {
+            if (isSending) return;
+            fileQueue = [];
+            renderQueue();
+            $('sendBtn').disabled = true;
+        };
+
+        // ── THÊM FILE VÀO QUEUE ───────────────────────────────────────────
+        function addFilesToQueue(fileList) {
+            let added = 0;
+            for (const file of fileList) {
+                const exists = fileQueue.some(f => f.name === file.name && f.size === file.size);
+                if (!exists) {
+                    fileQueue.push({ file, name: file.name, size: file.size, status: 'pending' });
+                    added++;
+                }
+            }
+            if (added > 0) {
+                renderQueue();
+                $('sendBtn').disabled = fileQueue.length === 0;
+                showStatus('senderStatus', `✅ Đã thêm ${added} file vào hàng đợi`, 'ok');
+            } else {
+                showStatus('senderStatus', '⚠️ Các file này đã có trong hàng đợi', 'warn');
+            }
+        }
+
+        // ── FILE INPUT & DROP ─────────────────────────────────────────────
+        $('fileInput').addEventListener('change', e => {
+            if (e.target.files.length > 0) addFilesToQueue(e.target.files);
+            e.target.value = '';
+        });
+
+        const dropArea = $('dropArea');
+        dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', e => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files);
+        });
+
+        // ── NÚT "TẠO PHÒNG" ──────────────────────────────────────────────
+        $('sendBtn').addEventListener('click', () => {
+            if (fileQueue.length === 0) { showStatus('senderStatus', '⚠️ Chưa thêm file nào!', 'warn'); return; }
+            if (!$('senderPin').value.trim()) { showStatus('senderStatus', '⚠️ Vui lòng đặt mã PIN!', 'warn'); return; }
+            showStatus('senderStatus', `⏳ Đang chờ người nhận kết nối… (${fileQueue.length} file sẵn sàng)`, 'warn');
+        });
+
+        function generateRandomId(length = 10) {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            const array = new Uint8Array(length);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => chars[byte % chars.length]).join('');
+        }
+
+        // ── INIT PEER (SINGLE INSTANCE) ───────────────────────────────────
+        async function initPeer() {
+            const cfg = await loadConfig();
+            const opts = { host: cfg.peerHost, port: cfg.peerPort, path: cfg.peerPath, secure: cfg.secure };
+
+            const customId = generateRandomId(10);
+            peer = new Peer(customId, opts);
+
+            peer.on('open', id => {
+                $('myPeerId').innerText = id;
+                $('copyMyIdBtn').disabled = false;
+                $('connectBtn').disabled = false;
+                showShareBox(id);
+            });
+
+            peer.on('error', err => {
+                showStatus('senderStatus', '❌ Lỗi Peer: ' + err.message, 'err');
+                showStatus('receiverStatus', '❌ Lỗi Peer: ' + err.message, 'err');
+            });
+
+            // Lắng nghe kết nối đến (Sender mode)
+            peer.on('connection', conn => {
+                const remotePeerId = conn.peer;
+
+                // 1. Kiểm tra khóa toàn cục (Global Lock)
+                if (Date.now() < globalLockUntil) {
+                    conn.on('open', () => {
+                        const wait = Math.ceil((globalLockUntil - Date.now()) / 1000);
+                        conn.send({ type: 'auth_result', ok: false, reason: `Hệ thống tạm khóa do nhập sai PIN liên tục. Vui lòng thử lại sau ${wait}s.` });
+                        conn.close();
+                    });
+                    return;
+                }
+
+                // 2. Kiểm tra khóa cụ thể theo Peer ID (chống spam)
+                const record = pinAttemptsMap.get(remotePeerId);
+                if (record && Date.now() < record.lockUntil) {
+                    conn.on('open', () => {
+                        const wait = Math.ceil((record.lockUntil - Date.now()) / 1000);
+                        conn.send({ type: 'auth_result', ok: false, reason: `Thiết bị bị tạm khóa. Thử lại sau ${wait}s.` });
+                        conn.close();
+                    });
+                    return;
+                }
+
+                senderConn = conn;
+
+                conn.on('open', () => {
+                    showStatus('senderStatus', '📞 Đã kết nối — đang gửi yêu cầu xác thực…', 'warn');
+                    // Sinh thách thức ngẫu nhiên
+                    const challenge = generateRandomChallenge();
+                    conn.challenge = challenge;
+                    conn.send({ type: 'auth_challenge', challenge });
+                });
+
+                conn.on('data', async msg => {
+                    if (msg.type === 'auth_response') {
+                        let record = pinAttemptsMap.get(remotePeerId);
+                        if (!record || Date.now() > record.lockUntil) {
+                            record = { count: 0, lockUntil: 0 };
+                        }
+
+                        if (record.count >= MAX_PIN_ATTEMPTS) {
+                            conn.send({ type: 'auth_result', ok: false, reason: 'Tài khoản bị khóa tạm thời 30 giây.' });
+                            conn.close();
+                            return;
+                        }
+
+                        const myPin = $('senderPin').value.trim();
+                        if (!myPin) {
+                            conn.send({ type: 'auth_result', ok: false, reason: 'Chưa đặt PIN ở phía gửi' });
+                            return;
+                        }
+
+                        const expectedResponse = await computeChallengeResponse(myPin, conn.challenge);
+                        if (msg.response !== expectedResponse) {
+                            record.count++;
+                            globalFailCount++;
+                            // Khóa toàn cục lũy tiến: 5s * số lần sai toàn cục (tối đa 30s)
+                            const globalLockDuration = Math.min(30000, globalFailCount * 5000);
+                            globalLockUntil = Date.now() + globalLockDuration;
+
+                            if (record.count >= MAX_PIN_ATTEMPTS) {
+                                record.lockUntil = Date.now() + PIN_LOCK_MS;
+                                pinAttemptsMap.set(remotePeerId, record);
+                                conn.send({ type: 'auth_result', ok: false, reason: 'Sai PIN quá nhiều. Khóa 30s.' });
+                                showStatus('senderStatus', `🚫 Khóa peer ${remotePeerId} do nhập sai PIN 5 lần.`, 'err');
+                            } else {
+                                pinAttemptsMap.set(remotePeerId, record);
+                                conn.send({ type: 'auth_result', ok: false, reason: `Sai PIN (${record.count}/${MAX_PIN_ATTEMPTS})` });
+                                showStatus('senderStatus', `🚫 Peer ${remotePeerId} nhập sai PIN (${record.count}/${MAX_PIN_ATTEMPTS})`, 'warn');
+                            }
+                            conn.close();
+                            return;
+                        }
+
+                        // PIN đúng -> Reset attempts và global failure counters
+                        pinAttemptsMap.delete(remotePeerId);
+                        globalFailCount = 0;
+                        globalLockUntil = 0;
+
+                        conn.send({ type: 'auth_result', ok: true });
+                        conn.send({ type: 'session_info', totalFiles: fileQueue.length });
+                        showStatus('senderStatus', `✅ Xác thực thành công — bắt đầu gửi ${fileQueue.length} file…`, 'ok');
+                        sendAllFiles(conn);
+                    }
+                });
+
+                conn.on('error', err => showStatus('senderStatus', '❌ ' + err.message, 'err'));
+            });
+        }
+
+        // ── GỬI TUẦN TỰ TẤT CẢ FILE (STREAMING) ───────────────────────────
+        async function sendAllFiles(conn) {
+            isSending = true;
+            renderQueue();
+
+            adaptiveChunk.size = 64 * 1024;
+            speedMeter.bytes = 0;
+            speedMeter.windowStart = Date.now();
+            speedMeter.lastKBps = 0;
+
+            const pin = $('senderPin').value.trim();
+            const totalBytes = fileQueue.reduce((s, f) => s + f.size, 0);
+            let bytesSentTotal = 0;
+
+            for (let i = 0; i < fileQueue.length; i++) {
+                const qf = fileQueue[i];
+                qf.status = 'sending';
+                renderQueue();
+
+                try {
+                    await sendOneFile(conn, qf, i, (bytesSent) => {
+                        const overall = Math.round((bytesSentTotal + bytesSent) / totalBytes * 100);
+                        const speedTxt = speedMeter.lastKBps > 0
+                            ? ` · ${speedMeter.lastKBps} KB/s · chunk ${adaptiveChunk.size / 1024 | 0}KB`
+                            : '';
+                        setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+                            'senderChunkInfo', overall,
+                            `📤 File ${i + 1}/${fileQueue.length}: ${qf.name}`,
+                            `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}`
+                        );
+                        const filePct = Math.round(bytesSent / qf.size * 100);
+                        updateQueueItemBar(i, filePct);
+                    }, pin);
+
+                    qf.status = 'done';
+                    bytesSentTotal += qf.size;
+                } catch (err) {
+                    qf.status = 'error';
+                    showStatus('senderStatus', `❌ Gửi file thất bại: ${qf.name}`, 'err');
+                }
+                renderQueue();
+            }
+
+            conn.send({ type: 'all_done' });
+            isSending = false;
+            clearAESKeyCache();
+            setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
+                'senderChunkInfo', 100,
+                `✅ Đã gửi ${fileQueue.length} file`,
+                `Tổng: ${formatBytes(totalBytes)}`, true
+            );
+            showStatus('senderStatus', `✅ Gửi xong tất cả ${fileQueue.length} file!`, 'ok');
+            renderQueue();
+        }
+
+        // ── GỬI MỘT FILE (STREAMING & BACKPRESSURE) ────────────────────────
+        function sendOneFile(conn, qf, fileIndex, onProgress, pin) {
+            return new Promise((resolve, reject) => {
+                const file = qf.file;
+                adaptiveChunk.size = 64 * 1024;
+                speedMeter.bytes = 0;
+                speedMeter.windowStart = Date.now();
+
+                const totalChunks = Math.ceil(file.size / adaptiveChunk.size);
+                const saltHex = generateRandomChallenge(); // Sinh Salt động cho file này
+
+                conn.send({
+                    type: 'file_header',
+                    fileName: qf.name,
+                    fileSize: file.size,
+                    totalChunks,
+                    fileIndex,
+                    encrypted: true,
+                    salt: saltHex,
+                });
+
+                let offset = 0;
+                let bytesSent = 0;
+                let chunkIndex = 0;
+
+                const dc = conn._dc || conn.dataChannel || null;
+
+                function adjustChunkSize() {
+                    if (!dc) return;
+                    const buffered = dc.bufferedAmount;
+                    if (buffered > BUFFER_HIGH) {
+                        adaptiveChunk.size = Math.max(adaptiveChunk.min, Math.round(adaptiveChunk.size * 0.5));
+                    } else if (buffered < BUFFER_LOW) {
+                        adaptiveChunk.size = Math.min(adaptiveChunk.max, adaptiveChunk.size + adaptiveChunk.step);
+                    }
+                }
+
+                function updateSpeedMeter(justSentBytes) {
+                    speedMeter.bytes += justSentBytes;
+                    const now = Date.now();
+                    const elapsed = now - speedMeter.windowStart;
+                    if (elapsed >= 500) {
+                        speedMeter.lastKBps = Math.round(speedMeter.bytes / elapsed);
+                        speedMeter.bytes = 0;
+                        speedMeter.windowStart = now;
+                        const chunkEl = $('senderChunkInfo');
+                        if (chunkEl) {
+                            chunkEl.textContent =
+                                `${speedMeter.lastKBps} KB/s · chunk ${adaptiveChunk.size / 1024 | 0}KB · 🔐 AES-GCM`;
+                        }
+                    }
+                }
+
+                async function sendNext() {
+                    try {
+                        while (offset < file.size) {
+                            // Cơ chế Backpressure: Nếu buffer đầy, tạm dừng và đợi sự kiện low threshold
+                            if (dc && dc.bufferedAmount > BUFFER_HIGH) {
+                                dc.bufferedAmountLowThreshold = BUFFER_LOW;
+                                dc.onbufferedamountlow = () => {
+                                    dc.onbufferedamountlow = null;
+                                    adjustChunkSize();
+                                    sendNext(); // Tiếp tục vòng lặp
+                                };
+                                return; // Thoát khỏi hàm để tạm dừng vòng lặp
+                            }
+
+                            adjustChunkSize();
+
+                            const end = Math.min(offset + adaptiveChunk.size, file.size);
+                            const slice = file.slice(offset, end);
+                            const plainChunk = await slice.arrayBuffer(); // Đọc dung lượng nhỏ vào RAM
+                            const chunkBytes = end - offset;
+
+                            // Mã hóa chunk qua AES-GCM với muối động
+                            const encryptedChunk = await encryptChunk(pin, plainChunk, saltHex);
+
+                            conn.send({ type: 'file_chunk', index: chunkIndex, data: encryptedChunk });
+
+                            offset += chunkBytes;
+                            bytesSent += chunkBytes;
+                            chunkIndex += 1;
+                            onProgress(bytesSent);
+                            updateSpeedMeter(chunkBytes);
+                        }
+
+                        // File gửi hoàn tất
+                        conn.send({ type: 'file_done', fileIndex });
+                        onProgress(file.size);
+                        resolve();
+                    } catch (err) {
+                        reject(err);
+                    }
+                }
+
+                sendNext();
+            });
+        }
+
+        // ── RECEIVER: NÚT KẾT NỐI ────────────────────────────────────────
+        $('connectBtn').addEventListener('click', async () => {
+            const targetId = $('targetPeerId').value.trim();
+            if (!targetId) { showStatus('receiverStatus', '⚠️ Nhập Peer ID người gửi!', 'warn'); return; }
+            const pin = $('receiverPin').value.trim();
+            if (!pin) { showStatus('receiverStatus', '⚠️ Nhập mã PIN!', 'warn'); return; }
+
+            if (Date.now() < pinLockUntil) {
+                const wait = Math.ceil((pinLockUntil - Date.now()) / 1000);
+                showStatus('receiverStatus', `🔒 Tạm khoá ${wait}s`, 'err');
+                return;
+            }
+
+            showStatus('receiverStatus', '⏳ Đang kết nối…', 'warn');
+
+            recvFiles = [];
+            recvTotalBytes = 0;
+            recvExpectedTotal = 0;
+            currentRecvFile = null;
+            _chunkQueue = Promise.resolve();
+            $('recvQueue').style.display = 'none';
+            $('recvList').innerHTML = '';
+
+            // Dùng thực thể peer chung duy nhất
+            receiverConn = peer.connect(targetId, { reliable: true });
+
+            receiverConn.on('open', async () => {
+                showStatus('receiverStatus', '🔐 Đang kết nối xác thực…', 'warn');
+                // Chờ Sender gửi thử thách (challenge) qua gói tin 'auth_challenge'
+            });
+
+            receiverConn.on('data', async msg => {
+                // Nhận challenge từ Sender
+                if (msg.type === 'auth_challenge') {
+                    showStatus('receiverStatus', '🔐 Đang xác thực PIN…', 'warn');
+                    try {
+                        const response = await computeChallengeResponse(pin, msg.challenge);
+                        receiverConn.send({ type: 'auth_response', response });
+                    } catch (e) {
+                        showStatus('receiverStatus', '❌ Lỗi xử lý xác thực.', 'err');
+                        receiverConn.close();
+                    }
+                }
+
+                // PIN Verification Result
+                else if (msg.type === 'auth_result') {
+                    if (!msg.ok) {
+                        pinAttempts++;
+                        if (pinAttempts >= MAX_PIN_ATTEMPTS) {
+                            pinLockUntil = Date.now() + PIN_LOCK_MS;
+                            pinAttempts = 0;
+                            showStatus('receiverStatus', `🔒 Khoá 30s do sai PIN ${MAX_PIN_ATTEMPTS} lần`, 'err');
+                        } else {
+                            showStatus('receiverStatus', `🚫 ${msg.reason}`, 'err');
+                        }
+                        receiverConn.close();
+                        return;
+                    }
+                    pinAttempts = 0;
+                    showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
+                }
+
+                // Session metadata
+                else if (msg.type === 'session_info') {
+                    recvExpectedTotal = 0;
+                    showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
+                }
+
+                // File Header (nhận salt động)
+                else if (msg.type === 'file_header') {
+                    currentRecvFile = {
+                        chunks: [],
+                        receivedBytes: 0,
+                        expectedSize: msg.fileSize,
+                        name: msg.fileName,
+                        totalChunks: msg.totalChunks,
+                        fileIndex: msg.fileIndex,
+                        encrypted: msg.encrypted === true,
+                        salt: msg.salt,
+                    };
+                    recvExpectedTotal += msg.fileSize;
+
+                    recvFiles.push({ name: msg.fileName, size: msg.fileSize, status: 'receiving' });
+                    renderRecvList();
+                    showStatus('receiverStatus', `📥 Đang nhận file ${msg.fileIndex + 1}: ${msg.fileName}`, 'ok');
+                }
+
+                // File Chunk
+                else if (msg.type === 'file_chunk') {
+                    if (!currentRecvFile) return;
+                    const targetFile = currentRecvFile;
+                    const rawData = msg.data;
+                    const isEncrypted = targetFile.encrypted;
+                    const pinVal = $('receiverPin').value.trim();
+                    const saltVal = targetFile.salt;
+
+                    enqueueChunk(async () => {
+                        let chunkData = rawData;
+                        if (isEncrypted) {
+                            try {
+                                chunkData = await decryptChunk(pinVal, rawData, saltVal);
+                            } catch (err) {
+                                showStatus('receiverStatus', '❌ Giải mã thất bại — sai PIN hoặc dữ liệu lỗi', 'err');
+                                return;
+                            }
+                        }
+
+                        targetFile.chunks.push(chunkData);
+                        targetFile.receivedBytes += chunkData.byteLength;
+                        recvTotalBytes += chunkData.byteLength;
+
+                        const filePct = Math.round(targetFile.receivedBytes / targetFile.expectedSize * 100);
+                        updateRecvItemBar(targetFile.fileIndex, filePct);
+
+                        const overallPct = recvExpectedTotal > 0
+                            ? Math.round(recvTotalBytes / recvExpectedTotal * 100)
+                            : 0;
+                        setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
+                            'receiverChunkInfo', overallPct,
+                            `📥 File ${targetFile.fileIndex + 1}: ${targetFile.name}`,
+                            `${formatBytes(recvTotalBytes)} / ${formatBytes(recvExpectedTotal)}`
+                        );
+                    });
+                }
+
+                // File Done
+                else if (msg.type === 'file_done') {
+                    if (!currentRecvFile) return;
+                    const cf = currentRecvFile;
+                    currentRecvFile = null;
+
+                    enqueueChunk(async () => {
+                        const blob = new Blob(cf.chunks);
+                        const fileInfo = recvFiles[cf.fileIndex];
+
+                        fileInfo.status = 'ok';
+                        renderRecvList();
+
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = cf.name;
+                        document.body.appendChild(a); a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showStatus('receiverStatus', `✅ Đã tải: ${cf.name}`, 'ok');
+                    });
+                }
+
+                // Session Done
+                else if (msg.type === 'all_done') {
+                    clearAESKeyCache();
+                    const ok = recvFiles.filter(f => f.status === 'ok').length;
+                    const err = recvFiles.filter(f => f.status === 'err').length;
+                    setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
+                        'receiverChunkInfo', 100,
+                        `✅ Nhận xong ${ok} file${err > 0 ? ` (${err} lỗi)` : ''}`,
+                        formatBytes(recvTotalBytes), true
+                    );
+                    const msg2 = err > 0
+                        ? `⚠️ Nhận xong: ${ok} file thành công, ${err} file lỗi`
+                        : `✅ Đã nhận và tải xuống tất cả ${ok} file!`;
+                    showStatus('receiverStatus', msg2, err > 0 ? 'warn' : 'ok');
+                }
+            });
+
+            receiverConn.on('error', err => showStatus('receiverStatus', '❌ ' + err.message, 'err'));
+        });
+
+        // ── RENDER DANH SÁCH FILE RECEIVER ───────────────────────────────
+        function renderRecvList() {
+            const wrap = $('recvQueue');
+            const list = $('recvList');
+            const sumEl = $('recvSummary');
+
+            if (recvFiles.length === 0) { wrap.style.display = 'none'; return; }
+            wrap.style.display = 'block';
+
+            const ok = recvFiles.filter(f => f.status === 'ok').length;
+            sumEl.textContent = `${recvFiles.length} file · ${ok} đã tải`;
+
+            list.innerHTML = '';
+            recvFiles.forEach((f, i) => {
+                const el = document.createElement('div');
+                el.className = `recv-item ${f.status === 'ok' ? 'verified' : f.status === 'err' ? 'bad' : 'receiving'}`;
+                el.id = `ri-${i}`;
+                const safeName = escapeHtml(f.name);
+                el.innerHTML = `
+            <span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📥'}</span>
+            <span class="r-name" title="${safeName}">${safeName}</span>
+            <span class="r-size">${formatBytes(f.size)}</span>
+            <span class="r-badge ${f.status === 'ok' ? 'ok' : f.status === 'err' ? 'err' : 'cur'}">
+                ${f.status === 'ok' ? 'Đã tải' : f.status === 'err' ? 'Lỗi' : 'Đang nhận'}
+            </span>
+            ${f.status === 'receiving' ? `<div class="r-mini-wrap" style="grid-column:1/-1"><div class="r-mini-bar" id="rbar-${i}"></div></div>` : ''}
+        `;
+                list.appendChild(el);
+            });
+        }
+
+        // Cập nhật mini progress bar cho từng file phía nhận
+        function updateRecvItemBar(i, pct) {
+            const bar = $(`rbar-${i}`);
+            if (bar) bar.style.width = pct + '%';
+        }
+
+        // Khởi chạy
+        initPeer();
+    </script>
+</body>
+
+</html>
