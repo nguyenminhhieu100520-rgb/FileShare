@@ -15,8 +15,10 @@
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "mongoose": "^9.7.0",
     "peer": "^1.0.2",
     "socket.io": "^4.8.3"
   }

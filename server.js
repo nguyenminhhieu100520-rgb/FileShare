@@ -1,12 +1,13 @@
+require('dotenv').config();
 const { ExpressPeerServer } = require('peer');
 const express = require('express');
 const http = require('http');
-const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const { Server } = require("socket.io");
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -23,31 +24,47 @@ const sessionMiddleware = session({
 });
 app.use(sessionMiddleware);
 
-// Data Directory
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// ── MONGODB CONNECTION & SCHEMAS ──────────────────────────────────
+const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR);
+if (!MONGODB_URI) {
+    console.error("❌ LỖI NGHIÊM TRỌNG: Thiếu MONGODB_URI trong biến môi trường!");
+    console.error("Vui lòng tạo file .env hoặc thiết lập MONGODB_URI trên Render.");
+    process.exit(1);
 }
 
-let db = { users: [], messages: [] };
-if (fs.existsSync(DB_FILE)) {
-    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-}
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Kết nối MongoDB thành công'))
+    .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
 
-function saveDB() {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
+const userSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    username: { type: String, required: true, unique: true },
+    hash: { type: String, required: true },
+    friends: [{ type: String }]
+});
+const User = mongoose.model('User', userSchema);
+
+const messageSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    senderId: { type: String, required: true },
+    targetId: { type: String, required: true },
+    content: { type: String, required: true },
+    timestamp: { type: Number, required: true }
+});
+const Message = mongoose.model('Message', messageSchema);
 
 // Clean old messages (older than 3 days)
-function cleanOldMessages() {
-    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-    const cutoff = Date.now() - threeDaysMs;
-    const initialLen = db.messages.length;
-    db.messages = db.messages.filter(m => m.timestamp > cutoff);
-    if (db.messages.length !== initialLen) {
-        saveDB();
+async function cleanOldMessages() {
+    try {
+        const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - threeDaysMs;
+        const result = await Message.deleteMany({ timestamp: { $lt: cutoff } });
+        if (result.deletedCount > 0) {
+            console.log(`🧹 Đã dọn dẹp ${result.deletedCount} tin nhắn quá 3 ngày.`);
+        }
+    } catch (err) {
+        console.error('Lỗi khi dọn dẹp tin nhắn cũ:', err);
     }
 }
 setInterval(cleanOldMessages, 60 * 60 * 1000); // 1 hour
@@ -92,7 +109,7 @@ io.engine.use(sessionMiddleware);
 const onlineUsers = new Map(); // socket.id -> userId
 const userSockets = new Map(); // userId -> socket.id
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     const reqSession = socket.request.session;
     if (reqSession && reqSession.userId) {
         const userId = reqSession.userId;
@@ -100,94 +117,119 @@ io.on('connection', (socket) => {
         userSockets.set(userId, socket.id);
         
         // Notify user's friends that user is online
-        const user = db.users.find(u => u.id === userId);
-        if (user && user.friends) {
-            user.friends.forEach(fId => {
-                const fSocketId = userSockets.get(fId);
-                if (fSocketId) {
-                    io.to(fSocketId).emit('friend_status', { id: userId, status: 'online' });
-                }
-            });
-            
-            // Send to user their friends' status
-            const friendStatuses = user.friends.map(fId => ({
-                id: fId,
-                status: userSockets.has(fId) ? 'online' : 'offline'
-            }));
-            socket.emit('friends_statuses', friendStatuses);
+        try {
+            const user = await User.findOne({ id: userId });
+            if (user && user.friends) {
+                user.friends.forEach(fId => {
+                    const fSocketId = userSockets.get(fId);
+                    if (fSocketId) {
+                        io.to(fSocketId).emit('friend_status', { id: userId, status: 'online' });
+                    }
+                });
+                
+                // Send to user their friends' status
+                const friendStatuses = user.friends.map(fId => ({
+                    id: fId,
+                    status: userSockets.has(fId) ? 'online' : 'offline'
+                }));
+                socket.emit('friends_statuses', friendStatuses);
+            }
+        } catch (err) {
+            console.error('Lỗi khi lấy thông tin bạn bè socket:', err);
         }
     }
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
         const userId = onlineUsers.get(socket.id);
         if (userId) {
             onlineUsers.delete(socket.id);
             userSockets.delete(userId);
             
-            const user = db.users.find(u => u.id === userId);
-            if (user && user.friends) {
-                user.friends.forEach(fId => {
-                    const fSocketId = userSockets.get(fId);
-                    if (fSocketId) {
-                        io.to(fSocketId).emit('friend_status', { id: userId, status: 'offline' });
-                    }
-                });
-            }
+            try {
+                const user = await User.findOne({ id: userId });
+                if (user && user.friends) {
+                    user.friends.forEach(fId => {
+                        const fSocketId = userSockets.get(fId);
+                        if (fSocketId) {
+                            io.to(fSocketId).emit('friend_status', { id: userId, status: 'offline' });
+                        }
+                    });
+                }
+            } catch (err) {}
         }
     });
 
-    socket.on('send_message', (data) => {
+    socket.on('send_message', async (data) => {
         const senderId = onlineUsers.get(socket.id);
         if (!senderId) return;
 
         const { targetId, content } = data;
-        const message = {
-            id: crypto.randomUUID(),
+        const messageId = crypto.randomUUID();
+        const timestamp = Date.now();
+        
+        const messageDoc = new Message({
+            id: messageId,
             senderId,
             targetId,
             content,
-            timestamp: Date.now()
-        };
-        db.messages.push(message);
-        saveDB();
-
-        // Send to receiver if online
-        const targetSocketId = userSockets.get(targetId);
-        if (targetSocketId) {
-            io.to(targetSocketId).emit('receive_message', message);
-        }
+            timestamp
+        });
         
-        // Send back to sender
-        socket.emit('receive_message', message);
+        try {
+            await messageDoc.save();
+            
+            const message = { id: messageId, senderId, targetId, content, timestamp };
+            
+            // Send to receiver if online
+            const targetSocketId = userSockets.get(targetId);
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('receive_message', message);
+            }
+            
+            // Send back to sender
+            socket.emit('receive_message', message);
+        } catch (err) {
+            console.error('Lỗi lưu tin nhắn:', err);
+        }
     });
 });
 
 // ── REST API ROUTES ───────────────────────────────────────────────
 
 app.post('/api/auth/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Thiếu username/password' });
-    if (db.users.find(u => u.username === username)) return res.status(400).json({ error: 'Username đã tồn tại' });
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: 'Thiếu username/password' });
+        
+        const existing = await User.findOne({ username });
+        if (existing) return res.status(400).json({ error: 'Username đã tồn tại' });
 
-    const id = 'ID-' + Math.floor(100000 + Math.random() * 900000); // Ví dụ: ID-123456
-    const hash = await bcrypt.hash(password, 10);
-    const newUser = { id, username, hash, friends: [] };
-    
-    db.users.push(newUser);
-    saveDB();
-    res.json({ success: true, user: { id, username } });
+        const id = 'ID-' + Math.floor(100000 + Math.random() * 900000);
+        const hash = await bcrypt.hash(password, 10);
+        
+        const newUser = new User({ id, username, hash, friends: [] });
+        await newUser.save();
+        
+        res.json({ success: true, user: { id, username } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = db.users.find(u => u.username === username);
-    if (!user) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username });
+        if (!user) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
 
-    const match = await bcrypt.compare(password, user.hash);
-    if (!match) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
+        const match = await bcrypt.compare(password, user.hash);
+        if (!match) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
 
-    req.session.userId = user.id;
-    res.json({ success: true, user: { id: user.id, username: user.username } });
+        req.session.userId = user.id;
+        res.json({ success: true, user: { id: user.id, username: user.username } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -195,53 +237,86 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ success: true });
 });
 
-app.get('/api/auth/me', (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
-    const user = db.users.find(u => u.id === req.session.userId);
-    if (!user) return res.status(401).json({ error: 'User không tồn tại' });
-    res.json({ user: { id: user.id, username: user.username } });
+app.get('/api/auth/me', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const user = await User.findOne({ id: req.session.userId });
+        if (!user) return res.status(401).json({ error: 'User không tồn tại' });
+        res.json({ user: { id: user.id, username: user.username } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
-app.post('/api/friends/add', (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
-    const { friendId } = req.body;
-    
-    if (friendId === req.session.userId) return res.status(400).json({ error: 'Không thể tự kết bạn' });
-    
-    const user = db.users.find(u => u.id === req.session.userId);
-    const friend = db.users.find(u => u.id === friendId);
-    
-    if (!friend) return res.status(404).json({ error: 'Không tìm thấy ID người dùng' });
-    if (user.friends.includes(friendId)) return res.status(400).json({ error: 'Đã là bạn bè' });
+app.post('/api/friends/add', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { friendId } = req.body;
+        
+        if (friendId === req.session.userId) return res.status(400).json({ error: 'Không thể tự kết bạn' });
+        
+        const user = await User.findOne({ id: req.session.userId });
+        const friend = await User.findOne({ id: friendId });
+        
+        if (!friend) return res.status(404).json({ error: 'Không tìm thấy ID người dùng' });
+        if (user.friends.includes(friendId)) return res.status(400).json({ error: 'Đã là bạn bè' });
 
-    user.friends.push(friendId);
-    // Auto-accept cho đơn giản
-    if (!friend.friends.includes(user.id)) friend.friends.push(user.id);
-    
-    saveDB();
-    res.json({ success: true, friend: { id: friend.id, username: friend.username } });
+        user.friends.push(friendId);
+        if (!friend.friends.includes(user.id)) friend.friends.push(user.id);
+        
+        await user.save();
+        await friend.save();
+        
+        res.json({ success: true, friend: { id: friend.id, username: friend.username } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
-app.get('/api/friends', (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
-    const user = db.users.find(u => u.id === req.session.userId);
-    const friendsList = user.friends.map(fId => {
-        const f = db.users.find(u => u.id === fId);
-        return { id: f.id, username: f.username, status: userSockets.has(f.id) ? 'online' : 'offline' };
-    });
-    res.json({ friends: friendsList });
+app.get('/api/friends', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const user = await User.findOne({ id: req.session.userId });
+        
+        if (!user) return res.json({ friends: [] });
+
+        const friendsData = await User.find({ id: { $in: user.friends } });
+        
+        const friendsList = friendsData.map(f => {
+            return { id: f.id, username: f.username, status: userSockets.has(f.id) ? 'online' : 'offline' };
+        });
+        res.json({ friends: friendsList });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
-app.get('/api/messages/:friendId', (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
-    const { friendId } = req.params;
-    const userId = req.session.userId;
-    
-    const chatHistory = db.messages.filter(m => 
-        (m.senderId === userId && m.targetId === friendId) || 
-        (m.senderId === friendId && m.targetId === userId)
-    );
-    res.json({ messages: chatHistory });
+app.get('/api/messages/:friendId', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { friendId } = req.params;
+        const userId = req.session.userId;
+        
+        const chatHistory = await Message.find({
+            $or: [
+                { senderId: userId, targetId: friendId },
+                { senderId: friendId, targetId: userId }
+            ]
+        }).sort({ timestamp: 1 }); // Xếp theo thời gian cũ -> mới
+        
+        // Loại bỏ trường _id của mongoose khi trả về để cho sạch
+        const cleanHistory = chatHistory.map(m => ({
+            id: m.id,
+            senderId: m.senderId,
+            targetId: m.targetId,
+            content: m.content,
+            timestamp: m.timestamp
+        }));
+        
+        res.json({ messages: cleanHistory });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
 });
 
 // ── PEERJS SIGNALING SERVER ─────────────────────────────────────
