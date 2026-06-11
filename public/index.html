@@ -896,8 +896,22 @@
             }
             .friends-list {
                 width: 100%;
-                height: 200px;
+                height: auto;
                 flex-shrink: 0;
+                border-bottom: 2px solid var(--border);
+            }
+            .friend-list-scroll {
+                display: flex;
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding: 10px 15px;
+            }
+            .friend-item {
+                flex: 0 0 auto;
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                margin-right: 10px;
+                padding: 8px 15px;
             }
             .sidebar {
                 width: 200px;
@@ -1126,22 +1140,19 @@
                 <!-- Chat Section (Hidden until logged in) -->
                 <div id="chatSection" class="chat-container" style="display:none; margin: 0 auto;">
                     <div class="friends-list">
-                        <div class="friends-header">
-                            <div>Tài khoản của bạn</div>
-                            <div style="font-size:0.85rem; color:var(--blue); margin-top:6px; font-family:'JetBrains Mono', monospace;" id="myAccountId"></div>
-                        </div>
-                        <div style="padding:15px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px">
-                            <span style="font-size:0.8rem; color:var(--text-muted)">Thêm bạn bè bằng ID:</span>
-                            <div style="display:flex; gap:5px">
-                                <input type="text" id="addFriendId" class="pin-input" placeholder="Nhập ID" style="padding:8px 10px; font-size:0.85rem; letter-spacing:normal; flex:1">
-                                <button class="btn btn-primary btn-sm" onclick="addFriend()">Thêm</button>
+                        <div class="friends-header" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 15px;">
+                            <div>
+                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted)">Tài khoản của bạn</div>
+                                <div style="font-size:0.95rem; color:var(--blue); font-family:'JetBrains Mono', monospace; font-weight: bold;" id="myAccountId"></div>
                             </div>
+                            <button class="btn btn-sm" style="background:var(--surface2); color:var(--red); padding:6px 10px;" onclick="logout()" title="Đăng xuất">Đăng xuất</button>
                         </div>
-                        <div id="friendsListContainer" style="overflow-y:auto; flex:1">
+                        <div style="padding:10px 15px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
+                            <input type="text" id="addFriendId" class="pin-input" placeholder="Nhập ID kết bạn..." style="padding:8px 12px; font-size:0.85rem; letter-spacing:normal; flex:1">
+                            <button class="btn btn-primary btn-sm" onclick="addFriend()">Thêm</button>
+                        </div>
+                        <div id="friendsListContainer" class="friend-list-scroll" style="overflow-y:auto; flex:1">
                             <!-- Friends will be injected here -->
-                        </div>
-                        <div style="padding:15px; text-align:center; border-top:1px solid var(--border)">
-                            <button class="btn btn-sm" style="background:var(--surface2); color:var(--text)" onclick="logout()">Đăng xuất</button>
                         </div>
                     </div>
                     
