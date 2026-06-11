@@ -1154,7 +1154,13 @@
                     document.getElementById('authError').innerText = data.error;
                     document.getElementById('authError').style.display = 'block';
                 } else {
-                    checkAuth();
+                    if (isRegisterMode) {
+                        alert("Đăng ký thành công! Vui lòng đăng nhập lại.");
+                        document.getElementById('authPassword').value = '';
+                        toggleAuthMode();
+                    } else {
+                        checkAuth();
+                    }
                 }
             } catch (e) {
                 console.error(e);
