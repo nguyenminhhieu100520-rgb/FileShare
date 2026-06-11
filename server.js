@@ -40,6 +40,7 @@ mongoose.connect(MONGODB_URI)
 const userSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     username: { type: String, required: true, unique: true },
+    nickname: { type: String, default: "" },
     hash: { type: String, required: true },
     friends: [{ type: String }]
 });
@@ -226,7 +227,7 @@ app.post('/api/auth/login', async (req, res) => {
         if (!match) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
 
         req.session.userId = user.id;
-        res.json({ success: true, user: { id: user.id, username: user.username } });
+        res.json({ success: true, user: { id: user.id, username: user.username, nickname: user.nickname } });
     } catch (err) {
         res.status(500).json({ error: 'Lỗi server' });
     }
@@ -237,12 +238,26 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/auth/profile', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { nickname } = req.body;
+        const user = await User.findOne({ id: req.session.userId });
+        if (!user) return res.status(404).json({ error: 'Không tìm thấy user' });
+        user.nickname = nickname || "";
+        await user.save();
+        res.json({ success: true, user: { id: user.id, username: user.username, nickname: user.nickname } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
 app.get('/api/auth/me', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
         const user = await User.findOne({ id: req.session.userId });
         if (!user) return res.status(401).json({ error: 'User không tồn tại' });
-        res.json({ user: { id: user.id, username: user.username } });
+        res.json({ user: { id: user.id, username: user.username, nickname: user.nickname } });
     } catch (err) {
         res.status(500).json({ error: 'Lỗi server' });
     }
@@ -267,7 +282,7 @@ app.post('/api/friends/add', async (req, res) => {
         await user.save();
         await friend.save();
         
-        res.json({ success: true, friend: { id: friend.id, username: friend.username } });
+        res.json({ success: true, friend: { id: friend.id, username: friend.username, nickname: friend.nickname } });
     } catch (err) {
         res.status(500).json({ error: 'Lỗi server' });
     }
@@ -283,7 +298,7 @@ app.get('/api/friends', async (req, res) => {
         const friendsData = await User.find({ id: { $in: user.friends } });
         
         const friendsList = friendsData.map(f => {
-            return { id: f.id, username: f.username, status: userSockets.has(f.id) ? 'online' : 'offline' };
+            return { id: f.id, username: f.username, nickname: f.nickname, status: userSockets.has(f.id) ? 'online' : 'offline' };
         });
         res.json({ friends: friendsList });
     } catch (err) {

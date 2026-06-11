@@ -963,6 +963,9 @@
             <div class="menu-item" id="menu-chat" onclick="switchTab('chat')">
                 <span style="font-size:1.2rem">💬</span> Chat & Bạn Bè
             </div>
+            <div class="menu-item" id="menu-profile" onclick="switchTab('profile')" style="display:none">
+                <span style="font-size:1.2rem">👤</span> Thông tin cá nhân
+            </div>
         </div>
         <div class="main-content">
             <!-- P2P FILE TRANSFER VIEW -->
@@ -1173,6 +1176,29 @@
                     </div>
                 </div>
             </div>
+
+            <!-- PROFILE VIEW -->
+            <div id="view-profile" style="display:none; width:100%; padding:30px 20px; box-sizing:border-box;">
+                <div class="card" style="max-width: 500px; margin: 0 auto; gap:20px;">
+                    <h2 style="text-align:center; margin-bottom:10px">Thông tin cá nhân</h2>
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        <label style="color:var(--text-muted); font-size:0.85rem">Tên đăng nhập (không thể đổi)</label>
+                        <input type="text" id="profileUsername" class="pin-input" readonly style="background:var(--bg); color:var(--text-muted)">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        <label style="color:var(--text-muted); font-size:0.85rem">ID Tài khoản (dùng để kết bạn)</label>
+                        <div style="display:flex; gap:10px">
+                            <input type="text" id="profileId" class="pin-input" readonly style="background:var(--bg); flex:1">
+                            <button class="btn btn-primary btn-sm" onclick="copyText('profileId')">Copy</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        <label style="color:var(--text-muted); font-size:0.85rem">Biệt danh hiển thị (Nickname)</label>
+                        <input type="text" id="profileNickname" class="pin-input" placeholder="Nhập biệt danh của bạn...">
+                    </div>
+                    <button class="btn btn-primary" onclick="updateProfile()" style="margin-top:10px">Lưu thay đổi</button>
+                </div>
+            </div>
         </div>
     </div>
     <script src="/socket.io/socket.io.js"></script>
@@ -1181,9 +1207,11 @@
         function switchTab(tab) {
             document.getElementById('view-file').style.display = tab === 'file' ? 'flex' : 'none';
             document.getElementById('view-chat').style.display = tab === 'chat' ? 'block' : 'none';
+            document.getElementById('view-profile').style.display = tab === 'profile' ? 'block' : 'none';
             document.getElementById('menu-file').classList.toggle('active', tab === 'file');
             document.getElementById('menu-chat').classList.toggle('active', tab === 'chat');
-            if (tab === 'chat' && !isLoggedIn) {
+            document.getElementById('menu-profile').classList.toggle('active', tab === 'profile');
+            if ((tab === 'chat' || tab === 'profile') && !isLoggedIn) {
                 checkAuth();
             }
         }
@@ -1239,14 +1267,21 @@
                     currentUser = data.user;
                     document.getElementById('authSection').style.display = 'none';
                     document.getElementById('chatSection').style.display = 'flex';
+                    document.getElementById('menu-profile').style.display = 'flex';
                     
                     document.getElementById('myAccountId').innerHTML = `ID: ${currentUser.id} <button onclick="navigator.clipboard.writeText('${currentUser.id}');alert('Đã copy ID')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding-left:10px" title="Copy">📋</button>`;
+                    
+                    document.getElementById('profileUsername').value = currentUser.username;
+                    document.getElementById('profileId').value = currentUser.id;
+                    document.getElementById('profileNickname').value = currentUser.nickname || '';
+
                     initSocket();
                     loadFriends();
                 } else {
                     isLoggedIn = false;
                     document.getElementById('authSection').style.display = 'flex';
                     document.getElementById('chatSection').style.display = 'none';
+                    document.getElementById('menu-profile').style.display = 'none';
                 }
             } catch (e) {
                 console.error(e);
@@ -1257,7 +1292,24 @@
             await fetch('/api/auth/logout', { method: 'POST' });
             if (socket) socket.disconnect();
             socket = null;
+            document.getElementById('menu-profile').style.display = 'none';
+            switchTab('chat');
             checkAuth();
+        }
+
+        async function updateProfile() {
+            const newNick = document.getElementById('profileNickname').value.trim();
+            const res = await fetch('/api/auth/profile', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nickname: newNick})
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else {
+                alert('Cập nhật thông tin thành công!');
+                checkAuth();
+            }
         }
 
         async function addFriend() {
@@ -1284,12 +1336,13 @@
             container.innerHTML = '';
             
             data.friends.forEach(f => {
+                const displayName = f.nickname ? f.nickname : f.username;
                 const div = document.createElement('div');
                 div.className = 'friend-item' + (activeFriendId === f.id ? ' active' : '');
                 div.innerHTML = `
                     <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="status-${f.id}"></div>
                     <div>
-                        <div style="font-weight:600">${f.username}</div>
+                        <div style="font-weight:600">${displayName}</div>
                         <div style="font-size:0.75rem; color:var(--text-muted)">${f.id}</div>
                     </div>
                 `;
@@ -1300,10 +1353,11 @@
 
         function selectFriend(f) {
             activeFriendId = f.id;
+            const displayName = f.nickname ? f.nickname : f.username;
             document.getElementById('chatHeader').innerHTML = `
                 <button class="mobile-back-btn" onclick="backToFriendsList()" style="display:none; background:none; border:none; color:var(--text); font-size:1.4rem; cursor:pointer; padding:0 10px 0 0;" title="Quay lại">❮</button>
                 <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="header-status-${f.id}"></div>
-                <span>Chat với <strong>${f.username}</strong></span>
+                <span>Chat với <strong>${displayName}</strong></span>
             `;
             document.getElementById('chatInputArea').style.visibility = 'visible';
             
