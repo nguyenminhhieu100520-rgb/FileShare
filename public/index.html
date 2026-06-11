@@ -896,22 +896,24 @@
             }
             .friends-list {
                 width: 100%;
-                height: auto;
+                height: calc(100vh - 100px);
+                border-right: none;
                 flex-shrink: 0;
-                border-bottom: 2px solid var(--border);
             }
-            .friend-list-scroll {
-                display: flex;
-                overflow-x: auto;
-                overflow-y: hidden;
-                padding: 10px 15px;
+            .chat-window {
+                display: none; /* hidden by default on mobile */
+                width: 100%;
+                height: calc(100vh - 100px);
             }
-            .friend-item {
-                flex: 0 0 auto;
-                border: 1px solid var(--border);
-                border-radius: 20px;
-                margin-right: 10px;
-                padding: 8px 15px;
+            /* Classes for toggling on mobile */
+            .chat-container.mobile-chat-active .friends-list {
+                display: none !important;
+            }
+            .chat-container.mobile-chat-active .chat-window {
+                display: flex !important;
+            }
+            .mobile-back-btn {
+                display: block !important;
             }
             .sidebar {
                 width: 200px;
@@ -1158,7 +1160,8 @@
                     
                     <div class="chat-window">
                         <div class="chat-header" id="chatHeader" style="display:flex; align-items:center; gap:10px">
-                            <span>💬 Chọn một người bạn để bắt đầu chat</span>
+                            <button class="mobile-back-btn" onclick="backToFriendsList()" style="display:none; background:none; border:none; color:var(--text); font-size:1.4rem; cursor:pointer; padding:0 10px 0 0;" title="Quay lại">❮</button>
+                            <span id="chatHeaderTitle">💬 Chọn một người bạn để bắt đầu chat</span>
                         </div>
                         <div class="chat-messages" id="chatMessages">
                             <!-- Messages -->
@@ -1298,12 +1301,23 @@
         function selectFriend(f) {
             activeFriendId = f.id;
             document.getElementById('chatHeader').innerHTML = `
+                <button class="mobile-back-btn" onclick="backToFriendsList()" style="display:none; background:none; border:none; color:var(--text); font-size:1.4rem; cursor:pointer; padding:0 10px 0 0;" title="Quay lại">❮</button>
                 <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="header-status-${f.id}"></div>
                 <span>Chat với <strong>${f.username}</strong></span>
             `;
             document.getElementById('chatInputArea').style.visibility = 'visible';
+            
+            // Kích hoạt UI chat trên mobile
+            document.getElementById('chatSection').classList.add('mobile-chat-active');
+            
             loadFriends(); // update active class
             loadMessages(f.id);
+        }
+
+        function backToFriendsList() {
+            document.getElementById('chatSection').classList.remove('mobile-chat-active');
+            activeFriendId = null;
+            loadFriends();
         }
 
         async function loadMessages(friendId) {
