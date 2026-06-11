@@ -1,253 +1,292 @@
-// ════════════════════════════════════════════════════════════════
-//  server.js — Backend chính của ứng dụng P2P FileShare
-//
-//  Vai trò của file này:
-//    1. Phục vụ file tĩnh (HTML/CSS/JS) cho trình duyệt
-//    2. Chạy PeerJS Signaling Server — giúp 2 trình duyệt "tìm
-//       thấy nhau" để thiết lập kết nối WebRTC P2P
-//    3. Cung cấp endpoint /config để frontend tự lấy địa chỉ server
-//
-//  Lưu ý:
-//    Sau khi 2 trình duyệt đã kết nối P2P, file KHÔNG đi qua
-//    server này — server chỉ làm nhiệm vụ "môi giới" ban đầu.
-// ════════════════════════════════════════════════════════════════
-
-
-// ── IMPORT THƯ VIỆN ─────────────────────────────────────────────
-// ExpressPeerServer: phiên bản PeerServer tích hợp vào Express,
-//   dùng chung 1 port thay vì chạy riêng port 9000.
-//   Bắt buộc khi deploy lên Render (free tier chỉ cho 1 port).
-//   Tài liệu: https://github.com/peers/peerjs-server
 const { ExpressPeerServer } = require('peer');
-
-// express: framework web cho Node.js
-//   Tài liệu: https://expressjs.com
 const express = require('express');
-
-// http: module tích hợp sẵn trong Node.js (không cần npm install)
-//   Tạo HTTP server thô từ Express app vì PeerJS cần gắn trực tiếp
-//   vào HTTP server để xử lý WebSocket upgrade request.
-//   Tài liệu: https://nodejs.org/api/http.html
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
+const { Server } = require("socket.io");
+const crypto = require('crypto');
 
 const app = express();
 app.set('trust proxy', 1);
 
-// ── HTTPS REDIRECT MIDDLEWARE ────────────────────────────────────
-// Tự động chuyển hướng từ HTTP sang HTTPS ở môi trường production (ví dụ: Render)
+// JSON body parser for REST APIs
+app.use(express.json());
+
+// Session setup
+const sessionMiddleware = session({
+    secret: 'p2p-file-share-secret-key-123',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false } // Set true in production with HTTPS
+});
+app.use(sessionMiddleware);
+
+// Data Directory
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR);
+}
+
+let db = { users: [], messages: [] };
+if (fs.existsSync(DB_FILE)) {
+    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+}
+
+function saveDB() {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+// Clean old messages (older than 3 days)
+function cleanOldMessages() {
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - threeDaysMs;
+    const initialLen = db.messages.length;
+    db.messages = db.messages.filter(m => m.timestamp > cutoff);
+    if (db.messages.length !== initialLen) {
+        saveDB();
+    }
+}
+setInterval(cleanOldMessages, 60 * 60 * 1000); // 1 hour
+
+// ── HTTPS REDIRECT & SECURITY ────────────────────────────────────
 app.use((req, res, next) => {
     const isSecure = req.headers['x-forwarded-proto'] === 'https' || req.secure;
     const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
-    
     if (!isSecure && !isLocal) {
         return res.redirect(301, `https://${req.headers.host}${req.url}`);
     }
     next();
 });
-
-// Ẩn header X-Powered-By để không lộ công nghệ backend
 app.disable('x-powered-by');
 
-// ── SECURITY HEADERS MIDDLEWARE ──────────────────────────────────
+// CSP and other headers
 app.use((req, res, next) => {
-    // Ngăn chặn trang bị nhúng vào iframe (Clickjacking)
     res.setHeader('X-Frame-Options', 'DENY');
-
-    // Chặn MIME-sniffing
     res.setHeader('X-Content-Type-Options', 'nosniff');
-
-    // Chính sách Referrer
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-    // HSTS — Bắt buộc trình duyệt chỉ dùng HTTPS trong 1 năm
-    //   Tài liệu: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-
-    // Permissions-Policy — Vô hiệu hóa các API nhạy cảm không cần thiết
-    //   Tài liệu: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-
-    // Content Security Policy (CSP)
     res.setHeader('Content-Security-Policy', 
         `default-src 'self'; ` +
-        `script-src 'self' https://cdnjs.cloudflare.com https://unpkg.com 'unsafe-inline'; ` +
+        `script-src 'self' https://cdnjs.cloudflare.com https://unpkg.com 'unsafe-inline' 'unsafe-eval'; ` +
         `style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; ` +
         `font-src 'self' https://fonts.gstatic.com; ` +
         `connect-src 'self' ws: wss:; ` +
-        `img-src 'self' data:; ` +
+        `img-src 'self' data: blob:; ` +
         `frame-ancestors 'none';`
     );
-
     next();
 });
 
-
-
-
-// ── CẤU HÌNH PORT ───────────────────────────────────────────────
-// process.env.PORT: Render.com tự inject biến này khi deploy.
-//   Nếu chạy local thì biến không tồn tại → fallback về 3000.
-//   Tài liệu: https://nodejs.org/api/process.html#processenv
 const PORT = process.env.PORT || 3000;
-
-
-// ── TẠO HTTP SERVER ─────────────────────────────────────────────
-// Tại sao không dùng app.listen() trực tiếp?
-//   ExpressPeerServer cần tham chiếu đến HTTP server thô để lắng
-//   nghe sự kiện WebSocket upgrade — Express app không đủ.
-//   Ta sẽ gọi server.listen() ở cuối file thay vì app.listen().
 const server = http.createServer(app);
 
+// ── SOCKET.IO CHAT & PRESENCE ─────────────────────────────────────
+const io = new Server(server, { cors: { origin: "*" } });
+io.engine.use(sessionMiddleware);
+
+const onlineUsers = new Map(); // socket.id -> userId
+const userSockets = new Map(); // userId -> socket.id
+
+io.on('connection', (socket) => {
+    const reqSession = socket.request.session;
+    if (reqSession && reqSession.userId) {
+        const userId = reqSession.userId;
+        onlineUsers.set(socket.id, userId);
+        userSockets.set(userId, socket.id);
+        
+        // Notify user's friends that user is online
+        const user = db.users.find(u => u.id === userId);
+        if (user && user.friends) {
+            user.friends.forEach(fId => {
+                const fSocketId = userSockets.get(fId);
+                if (fSocketId) {
+                    io.to(fSocketId).emit('friend_status', { id: userId, status: 'online' });
+                }
+            });
+            
+            // Send to user their friends' status
+            const friendStatuses = user.friends.map(fId => ({
+                id: fId,
+                status: userSockets.has(fId) ? 'online' : 'offline'
+            }));
+            socket.emit('friends_statuses', friendStatuses);
+        }
+    }
+
+    socket.on('disconnect', () => {
+        const userId = onlineUsers.get(socket.id);
+        if (userId) {
+            onlineUsers.delete(socket.id);
+            userSockets.delete(userId);
+            
+            const user = db.users.find(u => u.id === userId);
+            if (user && user.friends) {
+                user.friends.forEach(fId => {
+                    const fSocketId = userSockets.get(fId);
+                    if (fSocketId) {
+                        io.to(fSocketId).emit('friend_status', { id: userId, status: 'offline' });
+                    }
+                });
+            }
+        }
+    });
+
+    socket.on('send_message', (data) => {
+        const senderId = onlineUsers.get(socket.id);
+        if (!senderId) return;
+
+        const { targetId, content } = data;
+        const message = {
+            id: crypto.randomUUID(),
+            senderId,
+            targetId,
+            content,
+            timestamp: Date.now()
+        };
+        db.messages.push(message);
+        saveDB();
+
+        // Send to receiver if online
+        const targetSocketId = userSockets.get(targetId);
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('receive_message', message);
+        }
+        
+        // Send back to sender
+        socket.emit('receive_message', message);
+    });
+});
+
+// ── REST API ROUTES ───────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Thiếu username/password' });
+    if (db.users.find(u => u.username === username)) return res.status(400).json({ error: 'Username đã tồn tại' });
+
+    const id = 'ID-' + Math.floor(100000 + Math.random() * 900000); // Ví dụ: ID-123456
+    const hash = await bcrypt.hash(password, 10);
+    const newUser = { id, username, hash, friends: [] };
+    
+    db.users.push(newUser);
+    saveDB();
+    res.json({ success: true, user: { id, username } });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+    const user = db.users.find(u => u.username === username);
+    if (!user) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
+
+    const match = await bcrypt.compare(password, user.hash);
+    if (!match) return res.status(400).json({ error: 'Sai thông tin đăng nhập' });
+
+    req.session.userId = user.id;
+    res.json({ success: true, user: { id: user.id, username: user.username } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+app.get('/api/auth/me', (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    const user = db.users.find(u => u.id === req.session.userId);
+    if (!user) return res.status(401).json({ error: 'User không tồn tại' });
+    res.json({ user: { id: user.id, username: user.username } });
+});
+
+app.post('/api/friends/add', (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    const { friendId } = req.body;
+    
+    if (friendId === req.session.userId) return res.status(400).json({ error: 'Không thể tự kết bạn' });
+    
+    const user = db.users.find(u => u.id === req.session.userId);
+    const friend = db.users.find(u => u.id === friendId);
+    
+    if (!friend) return res.status(404).json({ error: 'Không tìm thấy ID người dùng' });
+    if (user.friends.includes(friendId)) return res.status(400).json({ error: 'Đã là bạn bè' });
+
+    user.friends.push(friendId);
+    // Auto-accept cho đơn giản
+    if (!friend.friends.includes(user.id)) friend.friends.push(user.id);
+    
+    saveDB();
+    res.json({ success: true, friend: { id: friend.id, username: friend.username } });
+});
+
+app.get('/api/friends', (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    const user = db.users.find(u => u.id === req.session.userId);
+    const friendsList = user.friends.map(fId => {
+        const f = db.users.find(u => u.id === fId);
+        return { id: f.id, username: f.username, status: userSockets.has(f.id) ? 'online' : 'offline' };
+    });
+    res.json({ friends: friendsList });
+});
+
+app.get('/api/messages/:friendId', (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+    const { friendId } = req.params;
+    const userId = req.session.userId;
+    
+    const chatHistory = db.messages.filter(m => 
+        (m.senderId === userId && m.targetId === friendId) || 
+        (m.senderId === friendId && m.targetId === userId)
+    );
+    res.json({ messages: chatHistory });
+});
 
 // ── PEERJS SIGNALING SERVER ─────────────────────────────────────
-// Signaling Server làm gì?
-//   WebRTC cần trao đổi "SDP offer/answer" và "ICE candidates"
-//   giữa 2 trình duyệt trước khi kết nối P2P trực tiếp.
-//   PeerServer đóng vai trò trung gian truyền các thông tin này.
-//   Sau khi trao đổi xong → dữ liệu file truyền thẳng P2P,
-//   không qua server nữa.
-//
-//   Tìm hiểu thêm về WebRTC signaling:
-//   https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling
-//
-// allow_discovery: false → [BẢO MẬT]
-//   Nếu true: ai cũng có thể GET /peerjs/peers để lấy toàn bộ
-//   danh sách Peer ID đang online → lộ thông tin người dùng.
-//   Đặt false để chặn hoàn toàn endpoint này.
 const peerServer = ExpressPeerServer(server, {
     path: '/',
     allow_discovery: false,
 });
-
-// Mount PeerServer vào đường dẫn /peerjs trong Express.
-// Frontend kết nối tới: wss://your-app.onrender.com/peerjs
-// Dùng /peerjs (không dùng /) để tránh xung đột với route khác.
 app.use('/peerjs', peerServer);
 
-// Log sự kiện kết nối/ngắt kết nối Peer — hữu ích khi debug.
-// client.getId() trả về Peer ID ngẫu nhiên server đã cấp cho peer đó.
-peerServer.on('connection', (client) => {
-    console.log(`🔗 Peer connected: ${client.getId()}`);
-});
-peerServer.on('disconnect', (client) => {
-    console.log(`❌ Peer disconnected: ${client.getId()}`);
-});
-
-
-// ── RATE LIMITING ────────────────────────────────────────────────
-// Mục đích: ngăn bot spam hàng nghìn request/giây vào /config,
-//   tránh làm quá tải server (DoS đơn giản).
-//
-// Cơ chế Sliding Window Counter:
-//   Mỗi IP có bộ đếm (count) và thời điểm reset (resetAt).
-//   Nếu 1 IP vượt MAX request trong WINDOW ms → trả lỗi 429.
-//
-// Nâng cao hơn: dùng thư viện express-rate-limit
-//   https://www.npmjs.com/package/express-rate-limit
-
-// Map lưu trạng thái từng IP: key=IP, value={ count, resetAt }
-// Map hiệu quả hơn plain object khi thêm/xóa nhiều key liên tục.
-// Tài liệu Map: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
 const rateLimitMap = new Map();
-
 function rateLimit(req, res, next) {
-    // x-forwarded-for: header do Render/proxy thêm vào, chứa IP
-    //   thật của người dùng (request đi qua reverse proxy của Render).
-    //   req.socket.remoteAddress: IP kết nối trực tiếp (dùng khi local).
-    const ip = req.ip; // Express respects trust proxy and provides client IP
-
-    const now = Date.now();     // ms từ epoch — dùng để so sánh thời gian
-    const WINDOW = 60 * 1000;  // cửa sổ thời gian: 60,000 ms = 60 giây
-    const MAX = 30;             // tối đa 30 request / 60 giây / IP
-
+    const ip = req.ip;
+    const now = Date.now();
+    const WINDOW = 60 * 1000;
+    const MAX = 30;
     let entry = rateLimitMap.get(ip);
-
     if (!entry || now > entry.resetAt) {
-        // IP mới hoặc đã qua cửa sổ → tạo bộ đếm mới
         entry = { count: 1, resetAt: now + WINDOW };
     } else {
-        // Còn trong cửa sổ → tăng bộ đếm
         entry.count++;
     }
     rateLimitMap.set(ip, entry);
-
-    if (entry.count > MAX) {
-        // HTTP 429 Too Many Requests: status code chuẩn cho rate limit
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
-        return res.status(429).json({ error: 'Too many requests. Vui lòng thử lại sau.' });
-    }
-
-    // next(): gọi middleware/handler tiếp theo trong chuỗi Express.
-    // Nếu không gọi next() → request bị "treo", không được xử lý tiếp.
+    if (entry.count > MAX) return res.status(429).json({ error: 'Too many requests.' });
     next();
 }
 
-// Dọn dẹp Map định kỳ để tránh memory leak.
-// Nếu không dọn: theo thời gian Map tích lũy hàng triệu IP cũ
-//   → RAM tăng dần không kiểm soát được.
-// setInterval: https://nodejs.org/api/timers.html#setintervalcallback-delay-args
 setInterval(() => {
     const now = Date.now();
     for (const [ip, entry] of rateLimitMap) {
         if (now > entry.resetAt) rateLimitMap.delete(ip);
     }
-}, 5 * 60 * 1000); // chạy mỗi 5 phút
+}, 5 * 60 * 1000);
 
-
-// ── PHỤC VỤ FILE TĨNH ───────────────────────────────────────────
-// express.static('public'): tự động trả file trong /public khi
-//   trình duyệt request.
-//   Ví dụ: GET /       → /public/index.html
-//          GET /app.js → /public/app.js
-//   Tài liệu: https://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
 
-
-// ── ENDPOINT /config ─────────────────────────────────────────────
-// Tại sao cần endpoint này?
-//   Frontend cần biết địa chỉ PeerServer để kết nối.
-//   Nếu hardcode "localhost:9000" trong HTML → sai khi deploy.
-//   Thay vào đó, server tự trả về thông tin đúng theo môi trường.
-//   Cách đọc thêm về REST API design:
-//   https://restfulapi.net/
-//
-// Middleware rateLimit được áp dụng trước handler chính.
 app.get('/config', rateLimit, (req, res) => {
-
-    // Phát hiện HTTPS qua header x-forwarded-proto.
-    // Tại sao cần header này?
-    //   Render dùng reverse proxy: browser → HTTPS → Render → HTTP → Node.js
-    //   req.secure chỉ true nếu kết nối đến Node.js là HTTPS (không phải).
-    //   Header x-forwarded-proto ghi lại protocol gốc browser đã dùng.
-    //   https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Proto
     const isSecure = req.headers['x-forwarded-proto'] === 'https' || req.secure;
-
     res.json({
-        // req.hostname: tên miền hiện tại
-        //   Local  → "localhost"
-        //   Render → "myapp.onrender.com"
         peerHost: req.hostname,
-
-        // Port chuẩn: HTTPS=443, HTTP=PORT của app.
-        // PeerJS client cần đúng port để kết nối WebSocket tới PeerServer.
         peerPort: isSecure ? 443 : PORT,
-
-        // Phải khớp với app.use('/peerjs', peerServer) ở trên
         peerPath: '/peerjs',
-
-        // true  → PeerJS dùng wss:// (WebSocket Secure — bắt buộc với HTTPS)
-        // false → PeerJS dùng ws://  (WebSocket thường — chỉ cho local)
-        // Tại sao phải khớp? Trang HTTPS không được dùng ws:// (mixed content)
         secure: isSecure,
     });
 });
 
-
-// ── KHỞI ĐỘNG SERVER ─────────────────────────────────────────────
-// '0.0.0.0': lắng nghe trên TẤT CẢ network interface.
-//   'localhost' → chỉ nhận request từ chính máy đó (127.0.0.1)
-//   '0.0.0.0'  → nhận từ mọi thiết bị: LAN, Internet, cloud
-//   Bắt buộc khi deploy cloud hoặc muốn thiết bị LAN truy cập.
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅ Server sẵn sàng tại port ${PORT}`);
     console.log(`   PeerJS path : /peerjs`);
