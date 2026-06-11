@@ -1147,10 +1147,9 @@
                     <div class="friends-list">
                         <div class="friends-header" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 15px;">
                             <div>
-                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted)">Tài khoản của bạn</div>
+                                <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted)" id="myDisplayName">Tài khoản của bạn</div>
                                 <div style="font-size:0.95rem; color:var(--blue); font-family:'JetBrains Mono', monospace; font-weight: bold;" id="myAccountId"></div>
                             </div>
-                            <button class="btn btn-sm" style="background:var(--surface2); color:var(--red); padding:6px 10px;" onclick="logout()" title="Đăng xuất">Đăng xuất</button>
                         </div>
                         <div style="padding:10px 15px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
                             <input type="text" id="addFriendId" class="pin-input" placeholder="Nhập ID kết bạn..." style="padding:8px 12px; font-size:0.85rem; letter-spacing:normal; flex:1">
@@ -1196,7 +1195,10 @@
                         <label style="color:var(--text-muted); font-size:0.85rem">Biệt danh hiển thị (Nickname)</label>
                         <input type="text" id="profileNickname" class="pin-input" placeholder="Nhập biệt danh của bạn...">
                     </div>
-                    <button class="btn btn-primary" onclick="updateProfile()" style="margin-top:10px">Lưu thay đổi</button>
+                    <div style="display:flex; gap:10px; margin-top:10px">
+                        <button class="btn btn-primary" onclick="updateProfile()" style="flex:1">Lưu thay đổi</button>
+                        <button class="btn" onclick="logout()" style="background:var(--surface2); color:var(--red); border:1px solid var(--border); flex:1">Đăng xuất</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1274,6 +1276,7 @@
                     document.getElementById('profileUsername').value = currentUser.username;
                     document.getElementById('profileId').value = currentUser.id;
                     document.getElementById('profileNickname').value = currentUser.nickname || '';
+                    document.getElementById('myDisplayName').innerText = currentUser.nickname || currentUser.username;
 
                     initSocket();
                     loadFriends();
@@ -1357,7 +1360,7 @@
             document.getElementById('chatHeader').innerHTML = `
                 <button class="mobile-back-btn" onclick="backToFriendsList()" style="display:none; background:none; border:none; color:var(--text); font-size:1.4rem; cursor:pointer; padding:0 10px 0 0;" title="Quay lại">❮</button>
                 <div class="status-dot ${f.status === 'online' ? 'online' : ''}" id="header-status-${f.id}"></div>
-                <span>Chat với <strong>${displayName}</strong></span>
+                <span style="font-weight:600; font-size:1.1rem">${displayName}</span>
             `;
             document.getElementById('chatInputArea').style.visibility = 'visible';
             
