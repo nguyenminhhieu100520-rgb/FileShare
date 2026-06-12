@@ -282,6 +282,7 @@
 
         // ── STATE RECEIVER ───────────────────────────────────────────────
         let receiverConn = null;
+        let lastTargetId = null;
         let currentRecvFile = null; // { chunks[], receivedBytes, expectedSize, name, totalChunks, fileIndex, encrypted }
         let recvFiles = [];   // [{ name, size, status: 'ok'|'err' }]
 
@@ -720,8 +721,12 @@
 
                         conn.send({ type: 'auth_result', ok: true });
                         conn.send({ type: 'session_info', totalFiles: fileQueue.length });
-                        showStatus('senderStatus', `✅ Xác thực thành công — bắt đầu gửi ${fileQueue.length} file…`, 'ok');
+                    } else if (msg.type === 'client_ready') {
+                        showStatus('senderStatus', `✅ Bắt đầu truyền ${fileQueue.length} file…`, 'ok');
                         sendAllFiles(conn);
+                    } else if (msg.type === 'resume_request') {
+                        showStatus('senderStatus', `✅ Khôi phục truyền từ file ${msg.fileIndex + 1}…`, 'ok');
+                        sendAllFiles(conn, msg.fileIndex, msg.receivedBytes);
                     }
                 });
 
@@ -730,7 +735,7 @@
         }
 
         // ── GỬI TUẦN TỰ TẤT CẢ FILE (STREAMING) ───────────────────────────
-        async function sendAllFiles(conn) {
+        async function sendAllFiles(conn, startFileIndex = 0, startOffset = 0) {
             isSending = true;
             renderQueue();
 
@@ -742,11 +747,15 @@
             const pin = $('senderPin').value.trim();
             const totalBytes = fileQueue.reduce((s, f) => s + f.size, 0);
             let bytesSentTotal = 0;
+            for (let i = 0; i < startFileIndex; i++) {
+                bytesSentTotal += fileQueue[i].size;
+            }
 
-            for (let i = 0; i < fileQueue.length; i++) {
+            for (let i = startFileIndex; i < fileQueue.length; i++) {
                 const qf = fileQueue[i];
                 qf.status = 'sending';
                 renderQueue();
+                const resumeOff = (i === startFileIndex) ? startOffset : 0;
 
                 try {
                     await sendOneFile(conn, qf, i, (bytesSent) => {
@@ -764,11 +773,18 @@
                             `📤 File ${i + 1}/${fileQueue.length}: ${qf.name}`,
                             `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}${etaTxt}`
                         );
-                    }, pin);
+                    }, pin, resumeOff);
 
                     qf.status = 'done';
                     bytesSentTotal += qf.size;
                 } catch (err) {
+                    if (err.message === 'PAUSED') {
+                        qf.status = 'paused';
+                        showStatus('senderStatus', `⏸ Tạm ngưng gửi file do rớt mạng: ${qf.name}`, 'warn');
+                        isSending = false;
+                        renderQueue();
+                        return; // Thoát vòng lặp, giữ nguyên hàng đợi
+                    }
                     qf.status = 'error';
                     showStatus('senderStatus', `❌ Gửi file thất bại: ${qf.name}`, 'err');
                 }
@@ -788,7 +804,7 @@
         }
 
         // ── GỬI MỘT FILE (STREAMING & BACKPRESSURE) ────────────────────────
-        function sendOneFile(conn, qf, fileIndex, onProgress, pin) {
+        function sendOneFile(conn, qf, fileIndex, onProgress, pin, resumeOffset = 0) {
             return new Promise((resolve, reject) => {
                 const file = qf.file;
                 adaptiveChunk.size = 64 * 1024;
@@ -806,11 +822,12 @@
                     fileIndex,
                     encrypted: true,
                     salt: saltHex,
+                    resumeOffset: resumeOffset
                 });
 
-                let offset = 0;
-                let bytesSent = 0;
-                let chunkIndex = 0;
+                let offset = resumeOffset;
+                let bytesSent = resumeOffset;
+                let chunkIndex = Math.floor(resumeOffset / adaptiveChunk.size);
 
                 const dc = conn._dc || conn.dataChannel || null;
 
@@ -843,6 +860,7 @@
                 async function sendNext() {
                     try {
                         while (offset < file.size) {
+                            if (!conn.open) throw new Error('PAUSED');
                             // Cơ chế Backpressure: Nếu buffer đầy, tạm dừng và đợi sự kiện low threshold
                             if (dc && dc.bufferedAmount > BUFFER_HIGH) {
                                 dc.bufferedAmountLowThreshold = BUFFER_LOW;
@@ -901,13 +919,16 @@
 
             showStatus('receiverStatus', '⏳ Đang kết nối…', 'warn');
 
-            recvFiles = [];
-            recvTotalBytes = 0;
-            recvExpectedTotal = 0;
-            currentRecvFile = null;
-            _chunkQueue = Promise.resolve();
-            $('recvQueue').style.display = 'none';
-            $('recvList').innerHTML = '';
+            if (lastTargetId !== targetId || !currentRecvFile) {
+                recvFiles = [];
+                recvTotalBytes = 0;
+                recvExpectedTotal = 0;
+                currentRecvFile = null;
+                _chunkQueue = Promise.resolve();
+                $('recvQueue').style.display = 'none';
+                $('recvList').innerHTML = '';
+            }
+            lastTargetId = targetId;
 
             // Dùng thực thể peer chung duy nhất
             receiverConn = peer.connect(targetId, { reliable: true });
@@ -945,20 +966,33 @@
                         return;
                     }
                     pinAttempts = 0;
-                    showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
+                    if (currentRecvFile) {
+                        showStatus('receiverStatus', '✅ Xác thực thành công — đang yêu cầu tiếp tục truyền…', 'ok');
+                        receiverConn.send({ type: 'resume_request', fileIndex: currentRecvFile.fileIndex, receivedBytes: currentRecvFile.receivedBytes });
+                    } else {
+                        showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
+                    }
                 }
 
                 // Session metadata
                 else if (msg.type === 'session_info') {
-                    recvExpectedTotal = 0;
-                    recvSpeedMeter.bytes = 0;
-                    recvSpeedMeter.windowStart = Date.now();
-                    recvSpeedMeter.lastKBps = 0;
-                    showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
+                    if (!currentRecvFile) {
+                        recvExpectedTotal = 0;
+                        recvSpeedMeter.bytes = 0;
+                        recvSpeedMeter.windowStart = Date.now();
+                        recvSpeedMeter.lastKBps = 0;
+                        showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
+                        receiverConn.send({ type: 'client_ready' });
+                    }
                 }
 
                 // File Header (nhận salt động)
                 else if (msg.type === 'file_header') {
+                    if (msg.resumeOffset && currentRecvFile && currentRecvFile.fileIndex === msg.fileIndex) {
+                        currentRecvFile.salt = msg.salt; // cập nhật salt mới
+                        showStatus('receiverStatus', `📥 Tiếp tục nhận file ${msg.fileIndex + 1}: ${msg.fileName}`, 'ok');
+                        return;
+                    }
                     currentRecvFile = {
                         chunks: [],
                         receivedBytes: 0,
