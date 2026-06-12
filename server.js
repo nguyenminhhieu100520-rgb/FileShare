@@ -12,6 +12,37 @@ const mongoose = require('mongoose');
 const app = express();
 app.set('trust proxy', 1);
 
+// ── SERVER-SIDE ENCRYPTION (CHAT) ─────────────────────────────────
+const CHAT_MASTER_KEY = crypto.createHash('sha256').update(process.env.CHAT_MASTER_KEY || 'FileShare_Master_Key_Secret_123').digest();
+
+function encryptMessage(text) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', CHAT_MASTER_KEY, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+function decryptMessage(encryptedStr) {
+    try {
+        const parts = encryptedStr.split(':');
+        // Nếu tin nhắn cũ chưa mã hóa (không có dấu ':') thì trả về nguyên bản
+        if (parts.length !== 3) return encryptedStr; 
+        const iv = Buffer.from(parts[0], 'hex');
+        const authTag = Buffer.from(parts[1], 'hex');
+        const encrypted = parts[2];
+        const decipher = crypto.createDecipheriv('aes-256-gcm', CHAT_MASTER_KEY, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (err) {
+        console.error('Lỗi giải mã tin nhắn:', err);
+        return '🔒 [Tin nhắn bị lỗi mã hóa]';
+    }
+}
+
 // JSON body parser for REST APIs
 app.use(express.json());
 
@@ -169,11 +200,13 @@ io.on('connection', async (socket) => {
         const messageId = crypto.randomUUID();
         const timestamp = Date.now();
         
+        const encryptedContent = encryptMessage(content);
+        
         const messageDoc = new Message({
             id: messageId,
             senderId,
             targetId,
-            content,
+            content: encryptedContent,
             timestamp
         });
         
@@ -353,7 +386,7 @@ app.get('/api/messages/:friendId', async (req, res) => {
             id: m.id,
             senderId: m.senderId,
             targetId: m.targetId,
-            content: m.content,
+            content: decryptMessage(m.content),
             timestamp: m.timestamp,
             status: m.status || 'sent'
         }));
