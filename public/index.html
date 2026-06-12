@@ -24,6 +24,11 @@
             <div class="menu-item" id="menu-profile" onclick="switchTab('profile')" style="display:none">
                 <span style="font-size:1.2rem">👤</span> Thông tin cá nhân
             </div>
+            <div style="margin-top: auto; padding: 20px;">
+                <div class="menu-item" id="menu-darkmode" onclick="toggleDarkMode()" style="justify-content: center; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 0;">
+                    <span id="darkmode-icon" style="font-size:1.2rem">🌙</span> <span id="darkmode-text">Chế độ tối</span>
+                </div>
+            </div>
         </div>
         <div class="main-content">
             <!-- P2P FILE TRANSFER VIEW -->
@@ -270,6 +275,9 @@
         integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR"
         crossorigin="anonymous"></script>
     
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
     <script src="script.js"></script>
 </body>
 

@@ -41,7 +41,7 @@
                     document.getElementById('authError').style.display = 'block';
                 } else {
                     if (isRegisterMode) {
-                        alert("Đăng ký thành công! Vui lòng đăng nhập lại.");
+                        showToast("Đăng ký thành công! Vui lòng đăng nhập lại.", "success");
                         document.getElementById('authPassword').value = '';
                         toggleAuthMode();
                     } else {
@@ -64,7 +64,7 @@
                     document.getElementById('chatSection').style.display = 'flex';
                     document.getElementById('menu-profile').style.display = 'flex';
                     
-                    document.getElementById('myAccountId').innerHTML = `ID: ${currentUser.id} <button onclick="navigator.clipboard.writeText('${currentUser.id}');alert('Đã copy ID')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding-left:10px" title="Copy">📋</button>`;
+                    document.getElementById('myAccountId').innerHTML = `ID: ${currentUser.id} <button onclick="navigator.clipboard.writeText('${currentUser.id}');showToast('Đã copy ID', 'success')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding-left:10px" title="Copy">📋</button>`;
                     
                     document.getElementById('profileUsername').value = currentUser.username;
                     document.getElementById('profileId').value = currentUser.id;
@@ -101,9 +101,9 @@
                 body: JSON.stringify({nickname: newNick})
             });
             const data = await res.json();
-            if (data.error) alert(data.error);
+            if (data.error) showToast(data.error, 'error');
             else {
-                alert('Cập nhật thông tin thành công!');
+                showToast('Cập nhật thông tin thành công!', 'success');
                 checkAuth();
             }
         }
@@ -117,9 +117,9 @@
                 body: JSON.stringify({friendId})
             });
             const data = await res.json();
-            if (data.error) alert(data.error);
+            if (data.error) showToast(data.error, 'error');
             else {
-                alert('Thêm bạn bè thành công!');
+                showToast('Thêm bạn bè thành công!', 'success');
                 document.getElementById('addFriendId').value = '';
                 loadFriends();
             }
@@ -1078,3 +1078,54 @@
 
         // Khởi chạy
         initPeer();
+
+        // ── UI/UX ENHANCEMENTS (DARK MODE & TOASTS) ──────────────────────
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'toast-item';
+            
+            let icon = '💡';
+            if (type === 'success') icon = '✅';
+            if (type === 'error') icon = '❌';
+            if (type === 'warn') icon = '⚠️';
+
+            toast.innerHTML = `<span class="toast-icon">${icon}</span> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('hide');
+                toast.addEventListener('animationend', () => {
+                    toast.remove();
+                });
+            }, 3000);
+        }
+
+        // Dark Mode Logic
+        window.toggleDarkMode = function() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateDarkModeUI(isDark);
+        }
+
+        function updateDarkModeUI(isDark) {
+            const icon = document.getElementById('darkmode-icon');
+            const text = document.getElementById('darkmode-text');
+            if (icon && text) {
+                icon.innerText = isDark ? '☀️' : '🌙';
+                text.innerText = isDark ? 'Chế độ sáng' : 'Chế độ tối';
+            }
+        }
+
+        // Khởi tạo Dark mode từ localStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                updateDarkModeUI(true);
+            }
+        });
