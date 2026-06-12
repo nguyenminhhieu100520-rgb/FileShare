@@ -1,0 +1,942 @@
+:root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface2: #21262d;
+            --border: #30363d;
+            --blue: #58a6ff;
+            --blue-dim: #1f6feb;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #e3b341;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url('logo-bg.png');
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+            opacity: 0.15; /* Làm mờ đi để nội dung dễ đọc hơn */
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrapper {
+            max-width: 880px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        header h1 span {
+            color: var(--blue);
+        }
+
+        header p {
+            margin-top: 8px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 0;
+            /* ngăn card phình ra ngoài cột grid */
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .badge {
+            margin-left: auto;
+            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge-send {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+        }
+
+        .badge-recv {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+        }
+
+        /* ID row */
+        .id-row {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .id-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .id-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--blue);
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        /* ── Drop area ── */
+        .drop-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--surface2);
+            position: relative;
+        }
+
+        .drop-area:hover,
+        .drop-area.dragover {
+            border-color: var(--blue);
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        .drop-area .icon {
+            font-size: 28px;
+            margin-bottom: 6px;
+        }
+
+        .drop-area p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .drop-area p strong {
+            color: var(--blue);
+        }
+
+        .drop-area p.hint {
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+
+        /* ── File queue (MULTI-FILE) ── */
+        /*
+         * THAY ĐỔI CHÍNH so với bản cũ:
+         * Thay vì .file-info (1 dòng text), giờ dùng .file-queue — danh sách
+         * các file sẽ gửi. Mỗi file là 1 .queue-item có thể xóa riêng lẻ.
+         */
+        .file-queue {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        /* Header của queue: "3 file · 12.4 MB" + nút Xóa hết */
+        .queue-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            padding: 0 2px;
+        }
+
+        .queue-clear-btn {
+            background: none;
+            border: none;
+            color: var(--red);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-family: 'Sora', sans-serif;
+            transition: background 0.15s;
+        }
+
+        .queue-clear-btn:hover {
+            background: rgba(248, 81, 73, 0.12);
+        }
+
+        /* Mỗi dòng trong queue */
+        .queue-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            transition: border-color 0.15s;
+        }
+
+        /* Trạng thái file: pending / sending / done / error */
+        .queue-item.sending {
+            border-color: var(--blue);
+        }
+
+        .queue-item.done {
+            border-color: var(--green);
+            opacity: 0.7;
+        }
+
+        .queue-item.error {
+            border-color: var(--red);
+        }
+
+        .queue-item .q-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .queue-item .q-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+
+        .queue-item .q-size {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .queue-item .q-status {
+            font-size: 0.72rem;
+            white-space: nowrap;
+        }
+
+        .queue-item .q-del {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            line-height: 1;
+            transition: color 0.15s;
+            flex-shrink: 0;
+        }
+
+        .queue-item .q-del:hover {
+            color: var(--red);
+        }
+
+        /* Mini progress bar bên trong mỗi queue-item khi đang gửi */
+        .q-mini-bar-wrap {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 99px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .q-mini-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--blue);
+            border-radius: 99px;
+            transition: width 0.15s;
+        }
+
+        .queue-item.done .q-mini-bar {
+            background: var(--green);
+            width: 100%;
+        }
+
+        /* PIN */
+        .pin-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .pin-group label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pin-group label .lock {
+            color: var(--yellow);
+        }
+
+        .pin-input {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            font-family: 'JetBrains Mono', monospace;
+            width: 100%;
+            outline: none;
+            transition: border 0.2s;
+            letter-spacing: 4px;
+        }
+
+        .pin-input:focus {
+            border-color: var(--yellow);
+        }
+
+        /* Input group */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group input {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .input-group input::placeholder {
+            color: var(--text-muted);
+            letter-spacing: 0;
+            font-family: 'Sora', sans-serif;
+        }
+
+        .input-group input:focus {
+            border-color: var(--blue);
+        }
+
+        /* Buttons */
+        .btn {
+            border: none;
+            padding: 11px 18px;
+            border-radius: var(--radius);
+            font-size: 0.9rem;
+            font-weight: 600;
+            font-family: 'Sora', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s;
+            width: 100%;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--blue-dim);
+            color: white;
+        }
+
+        .btn-primary:not(:disabled):hover {
+            background: var(--blue);
+        }
+
+        .btn-sm {
+            width: auto;
+            padding: 8px 14px;
+        }
+
+        /* Status */
+        .status {
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            display: none;
+            line-height: 1.5;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.ok {
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            color: var(--green);
+        }
+
+        .status.err {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            color: var(--red);
+        }
+
+        .status.warn {
+            background: rgba(227, 179, 65, 0.1);
+            border: 1px solid rgba(227, 179, 65, 0.3);
+            color: var(--yellow);
+        }
+
+        /* Progress tổng (overall) */
+        .progress-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .progress-wrap.show {
+            display: flex;
+        }
+
+        .progress-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .progress-track {
+            height: 8px;
+            background: var(--surface2);
+            border-radius: 99px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 99px;
+            transition: width 0.2s;
+            background: linear-gradient(90deg, var(--blue-dim), var(--blue));
+        }
+
+        .progress-bar.done {
+            background: linear-gradient(90deg, #2ea043, var(--green));
+        }
+
+        .chunk-info {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Receiver file list */
+        .recv-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .recv-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+        }
+
+        .recv-item.receiving {
+            border-color: var(--blue);
+        }
+
+        .recv-item.verified {
+            border-color: var(--green);
+        }
+
+        .recv-item.bad {
+            border-color: var(--red);
+        }
+
+        .recv-item .r-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .recv-item .r-size {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .recv-item .r-badge {
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+
+        .r-badge.ok {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+        }
+
+        .r-badge.err {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--red);
+        }
+
+        .r-badge.cur {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+        }
+
+        .r-mini-wrap {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 99px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .r-mini-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--blue);
+            border-radius: 99px;
+            transition: width 0.15s;
+        }
+
+        footer {
+            margin-top: 28px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+
+        /* ── Share link box ── */
+        .share-box {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 14px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .share-box.show {
+            display: flex;
+        }
+
+        .share-link-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .share-link-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--blue);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .share-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .share-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .share-btn:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        .share-hint {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        /* ── QR overlay ── */
+        .qr-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-overlay.show {
+            display: flex;
+        }
+
+        .qr-modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            max-width: 320px;
+            width: 90%;
+        }
+
+        .qr-modal h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .qr-modal p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .qr-close {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 24px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }
+
+        .qr-close:hover {
+            border-color: var(--blue);
+            color: var(--blue);
+        }
+
+        /* ── Auto-fill badge (receiver) ── */
+        .autofill-badge {
+            display: none;
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            white-space: nowrap;
+        }
+
+        @media (max-width: 680px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    
+        /* -- NEW SIDEBAR LAYOUT -- */
+        .app-container {
+            display: flex;
+            width: 100vw;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        .sidebar .brand {
+            padding: 0 20px 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+        .sidebar .menu-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar .menu-item:hover, .sidebar .menu-item.active {
+            background: var(--surface2);
+            color: var(--blue);
+            border-right: 3px solid var(--blue);
+        }
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+        /* -- CHAT VIEW -- */
+        .chat-container {
+            width: 100%;
+            max-width: 880px;
+            display: flex;
+            height: calc(100vh - 60px);
+            gap: 20px;
+        }
+        .friends-list {
+            width: 250px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .friends-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+        .friend-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .friend-item:hover, .friend-item.active {
+            background: var(--surface2);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+        .status-dot.online {
+            background: var(--green);
+        }
+        .chat-window {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .msg {
+            max-width: 70%;
+            padding: 10px 14px;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .msg.sent {
+            align-self: flex-end;
+            background: var(--blue-dim);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .msg.recv {
+            align-self: flex-start;
+            background: var(--surface2);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
+        }
+        .chat-input {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+        .auth-container {
+            max-width: 400px;
+            margin: 50px auto;
+            background: var(--surface);
+            padding: 30px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .chat-container {
+                flex-direction: column;
+                height: auto;
+                min-height: calc(100vh - 100px);
+            }
+            .friends-list {
+                width: 100%;
+                height: calc(100vh - 100px);
+                border-right: none;
+                flex-shrink: 0;
+            }
+            .chat-window {
+                display: none; /* hidden by default on mobile */
+                width: 100%;
+                height: calc(100vh - 100px);
+            }
+            /* Classes for toggling on mobile */
+            .chat-container.mobile-chat-active .friends-list {
+                display: none !important;
+            }
+            .chat-container.mobile-chat-active .chat-window {
+                display: flex !important;
+            }
+            .mobile-back-btn {
+                display: block !important;
+            }
+            .sidebar {
+                width: 200px;
+            }
+        }
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                flex-direction: row;
+                padding: 10px;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                align-items: center;
+                justify-content: center;
+                flex-wrap: wrap;
+                z-index: 100;
+            }
+            .sidebar .brand {
+                margin: 0;
+                padding: 0 15px 0 0;
+                border-bottom: none;
+                border-right: 1px solid var(--border);
+            }
+            .sidebar .menu-item {
+                padding: 8px 12px;
+                border-right: none !important;
+            }
+            .sidebar .menu-item.active {
+                background: var(--surface2);
+                border-radius: var(--radius);
+                border-bottom: none !important;
+            }
+        }
