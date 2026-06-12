@@ -544,8 +544,18 @@
                 el.className = `queue-item ${f.status !== 'pending' ? f.status : ''}`;
                 el.id = `qi-${i}`;
                 const safeName = escapeHtml(f.name);
+
+                let iconHtml = `<span class="q-icon">${icons[f.status] || '📄'}</span>`;
+                if (f.previewUrl) {
+                    if (f.type.startsWith('image/')) {
+                        iconHtml = `<img src="${f.previewUrl}" class="q-icon preview-img" alt="img" style="width:24px;height:24px;object-fit:cover;border-radius:4px;vertical-align:middle;">`;
+                    } else if (f.type.startsWith('video/')) {
+                        iconHtml = `<video src="${f.previewUrl}" class="q-icon preview-img" muted style="width:24px;height:24px;object-fit:cover;border-radius:4px;vertical-align:middle;"></video>`;
+                    }
+                }
+
                 el.innerHTML = `
-            <span class="q-icon">${icons[f.status] || '📄'}</span>
+            ${iconHtml}
             <span class="q-name" title="${safeName}">${safeName}</span>
             <span class="q-size">${formatBytes(f.size)}</span>
             <span class="q-status" style="color:${f.status === 'done' ? 'var(--green)' : f.status === 'error' ? 'var(--red)' : f.status === 'sending' ? 'var(--blue)' : 'var(--text-muted)'}">${statusText[f.status] || 'Chờ'}</span>
@@ -584,7 +594,11 @@
             for (const file of fileList) {
                 const exists = fileQueue.some(f => f.name === file.name && f.size === file.size);
                 if (!exists) {
-                    fileQueue.push({ file, name: file.name, size: file.size, status: 'pending' });
+                    let previewUrl = null;
+                    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                        previewUrl = URL.createObjectURL(file);
+                    }
+                    fileQueue.push({ file, name: file.name, size: file.size, type: file.type, previewUrl, status: 'pending' });
                     added++;
                 }
             }
@@ -833,6 +847,7 @@
                         type: 'file_header',
                         fileName: qf.name,
                         fileSize: file.size,
+                        fileType: qf.file.type,
                         totalChunks,
                         fileIndex,
                         encrypted: true,
@@ -1017,6 +1032,7 @@
                         receivedBytes: 0,
                         expectedSize: msg.fileSize,
                         name: msg.fileName,
+                        type: msg.fileType || '',
                         totalChunks: msg.totalChunks,
                         fileIndex: msg.fileIndex,
                         encrypted: msg.encrypted === true,
@@ -1025,7 +1041,7 @@
                     };
                     recvExpectedTotal += msg.fileSize;
 
-                    recvFiles.push({ name: msg.fileName, size: msg.fileSize, status: 'receiving' });
+                    recvFiles.push({ name: msg.fileName, size: msg.fileSize, type: msg.fileType || '', previewUrl: null, status: 'receiving' });
                     renderRecvList();
                     showStatus('receiverStatus', `📥 Đang nhận file ${msg.fileIndex + 1}: ${msg.fileName}`, 'ok');
                 }
@@ -1090,13 +1106,16 @@
                     currentRecvFile = null;
 
                     enqueueChunk(async () => {
-                        const blob = new Blob(cf.chunks);
+                        const blob = new Blob(cf.chunks, { type: cf.type });
                         const fileInfo = recvFiles[cf.fileIndex];
 
                         showStatus('receiverStatus', `⏳ Đang xác thực SHA-256 cho file: ${cf.name}...`, 'warn');
                         const receivedHash = await calculateHash(blob);
                         if (receivedHash === cf.originalHash) {
                             fileInfo.verified = true;
+                            if (cf.type.startsWith('image/') || cf.type.startsWith('video/')) {
+                                fileInfo.previewUrl = URL.createObjectURL(blob);
+                            }
                             showStatus('receiverStatus', `✅ Đã tải và xác thực nguyên vẹn: ${cf.name}`, 'ok');
                         } else {
                             fileInfo.verified = false;
@@ -1156,8 +1175,18 @@
                 el.className = `recv-item ${f.status === 'ok' ? 'verified' : f.status === 'err' ? 'bad' : 'receiving'}`;
                 el.id = `ri-${i}`;
                 const safeName = escapeHtml(f.name);
+
+                let iconHtml = `<span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📥'}</span>`;
+                if (f.previewUrl) {
+                    if (f.type.startsWith('image/')) {
+                        iconHtml = `<img src="${f.previewUrl}" class="preview-img" alt="img" style="width:24px;height:24px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:8px;">`;
+                    } else if (f.type.startsWith('video/')) {
+                        iconHtml = `<video src="${f.previewUrl}" class="preview-img" muted style="width:24px;height:24px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:8px;"></video>`;
+                    }
+                }
+
                 el.innerHTML = `
-            <span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📥'}</span>
+            ${iconHtml}
             <span class="r-name" title="${safeName}">${safeName}</span>
             <span class="r-size">${formatBytes(f.size)}</span>
             <span class="r-badge ${f.status === 'ok' ? (f.verified ? 'ok' : 'ok') : f.status === 'err' ? 'err' : 'cur'}">
