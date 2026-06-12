@@ -31,11 +31,10 @@
             content: '';
             position: fixed;
             inset: 0;
-            background-image: url('logo-bg.png');
-            background-position: center;
-            background-repeat: no-repeat;
-            background-size: cover;
-            opacity: 0.15; /* Làm mờ đi để nội dung dễ đọc hơn */
+            background-image:
+                linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
             pointer-events: none;
             z-index: 0;
         }
