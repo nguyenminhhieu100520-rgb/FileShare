@@ -524,12 +524,7 @@
             <span class="q-size">${formatBytes(f.size)}</span>
             <span class="q-status" style="color:${f.status === 'done' ? 'var(--green)' : f.status === 'error' ? 'var(--red)' : f.status === 'sending' ? 'var(--blue)' : 'var(--text-muted)'}">${statusText[f.status] || 'Chờ'}</span>
             ${!isSending ? `<button class="q-del" onclick="removeFromQueue(${i})" title="Xóa">✕</button>` : ''}
-            ${f.status === 'sending' ? `<div class="q-mini-bar-wrap" style="grid-column:1/-1"><div class="q-mini-bar" id="qbar-${i}"></div></div>` : ''}
         `;
-                if (f.status === 'done') {
-                    const bar = el.querySelector('.q-mini-bar');
-                    if (bar) bar.style.width = '100%';
-                }
                 list.appendChild(el);
             });
         }
@@ -747,8 +742,6 @@
                             `📤 File ${i + 1}/${fileQueue.length}: ${qf.name}`,
                             `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}`
                         );
-                        const filePct = Math.round(bytesSent / qf.size * 100);
-                        updateQueueItemBar(i, filePct);
                     }, pin);
 
                     qf.status = 'done';
@@ -982,9 +975,6 @@
                         targetFile.receivedBytes += chunkData.byteLength;
                         recvTotalBytes += chunkData.byteLength;
 
-                        const filePct = Math.round(targetFile.receivedBytes / targetFile.expectedSize * 100);
-                        updateRecvItemBar(targetFile.fileIndex, filePct);
-
                         const overallPct = recvExpectedTotal > 0
                             ? Math.round(recvTotalBytes / recvExpectedTotal * 100)
                             : 0;
@@ -1064,7 +1054,6 @@
             <span class="r-badge ${f.status === 'ok' ? 'ok' : f.status === 'err' ? 'err' : 'cur'}">
                 ${f.status === 'ok' ? 'Đã tải' : f.status === 'err' ? 'Lỗi' : 'Đang nhận'}
             </span>
-            ${f.status === 'receiving' ? `<div class="r-mini-wrap" style="grid-column:1/-1"><div class="r-mini-bar" id="rbar-${i}"></div></div>` : ''}
         `;
                 list.appendChild(el);
             });

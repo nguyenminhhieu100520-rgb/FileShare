@@ -55,27 +55,25 @@
         </header>
 
         <!-- Unified Peer ID Section -->
-        <div class="card"
-            style="margin-bottom: 20px; align-items: center; text-align: center; gap: 12px; padding: 18px 24px;">
-            <div
-                style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; width: 100%;">
-                <span class="id-label" style="font-size: 0.9rem; font-weight: 600;">ID Của Bạn:</span>
-                <span class="id-value" id="myPeerId" style="font-size: 1rem; font-weight: 700; color: var(--blue);">Đang
-                    kết nối…</span>
-                <button class="copy-btn" id="copyMyIdBtn" onclick="copyText('myPeerId')"
-                    style="padding: 6px 12px; font-size: 0.85rem;" disabled>Sao chép ID</button>
-            </div>
+        <div class="card" style="margin-bottom: 20px; padding: 18px 24px;">
+            <div class="grid" style="align-items: stretch; gap: 20px;">
+                <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px;">
+                    <span class="id-label" style="font-size: 0.95rem; font-weight: 600;">ID Của Bạn</span>
+                    <span class="id-value" id="myPeerId" style="font-size: 1.4rem; font-weight: 700; color: var(--blue); word-break: break-all; text-align: center;">Đang kết nối…</span>
+                    <button class="copy-btn" id="copyMyIdBtn" onclick="copyText('myPeerId')" style="padding: 6px 16px; font-size: 0.85rem;" disabled>Sao chép ID</button>
+                </div>
 
-            <!-- Share link + QR — hiện sau khi có Peer ID -->
-            <div class="share-box" id="shareBox" style="width: 100%; margin-top: 4px;">
-                <div class="share-link-row">
-                    <span class="share-link-text" id="shareLinkText"></span>
-                    <div class="share-actions">
+                <!-- Share link + QR — hiện sau khi có Peer ID -->
+                <div class="share-box" id="shareBox" style="width: 100%; margin: 0; padding: 16px; justify-content: center; height: 100%; box-sizing: border-box;">
+                    <div class="share-link-row" style="margin-bottom: 8px;">
+                        <span class="share-link-text" id="shareLinkText" style="text-align: center; width: 100%;"></span>
+                    </div>
+                    <div class="share-actions" style="justify-content: center; margin-bottom: 8px;">
                         <button class="share-btn" onclick="copyShareLink()">📋 Copy link</button>
                         <button class="share-btn" onclick="showQR()">⬛ QR</button>
                     </div>
+                    <span class="share-hint" style="text-align: center;">Gửi link này cho người nhận — họ không cần nhập Peer ID thủ công</span>
                 </div>
-                <span class="share-hint">Gửi link này cho người nhận — họ không cần nhập Peer ID thủ công</span>
             </div>
         </div>
 
