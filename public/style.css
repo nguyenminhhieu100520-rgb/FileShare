@@ -884,6 +884,50 @@
             color: var(--text);
             border-bottom-left-radius: 4px;
         }
+        .msg-meta {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.7);
+            text-align: right;
+            margin-top: 4px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 4px;
+        }
+        .msg.recv .msg-meta {
+            color: var(--text-muted);
+        }
+        .msg-status {
+            font-size: 0.8rem;
+        }
+        .msg-status.read {
+            color: #4CAF50; /* Green tick for read */
+        }
+        /* Typing indicator */
+        .typing-indicator {
+            display: none;
+            padding: 10px 14px;
+            background: var(--surface2);
+            border-radius: 16px;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            gap: 4px;
+            align-items: center;
+            width: fit-content;
+        }
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
         .chat-input {
             padding: 15px;
             border-top: 1px solid var(--border);

@@ -51,7 +51,8 @@ const messageSchema = new mongoose.Schema({
     senderId: { type: String, required: true },
     targetId: { type: String, required: true },
     content: { type: String, required: true },
-    timestamp: { type: Number, required: true }
+    timestamp: { type: Number, required: true },
+    status: { type: String, default: 'sent' }
 });
 const Message = mongoose.model('Message', messageSchema);
 
@@ -179,12 +180,16 @@ io.on('connection', async (socket) => {
         try {
             await messageDoc.save();
             
-            const message = { id: messageId, senderId, targetId, content, timestamp };
+            const message = { id: messageId, senderId, targetId, content, timestamp, status: 'sent' };
             
             // Send to receiver if online
             const targetSocketId = userSockets.get(targetId);
             if (targetSocketId) {
                 io.to(targetSocketId).emit('receive_message', message);
+                // Also update status to delivered immediately since they are online
+                messageDoc.status = 'delivered';
+                await messageDoc.save();
+                message.status = 'delivered';
             }
             
             // Send back to sender
@@ -192,6 +197,30 @@ io.on('connection', async (socket) => {
         } catch (err) {
             console.error('Lỗi lưu tin nhắn:', err);
         }
+    });
+
+    socket.on('typing', (data) => {
+        const senderId = onlineUsers.get(socket.id);
+        if (!senderId) return;
+        const targetSocketId = userSockets.get(data.targetId);
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('friend_typing', { senderId });
+        }
+    });
+
+    socket.on('mark_all_read', async (data) => {
+        const userId = onlineUsers.get(socket.id);
+        if (!userId) return;
+        try {
+            await Message.updateMany(
+                { senderId: data.friendId, targetId: userId, status: { $ne: 'read' } },
+                { status: 'read' }
+            );
+            const friendSocketId = userSockets.get(data.friendId);
+            if (friendSocketId) {
+                io.to(friendSocketId).emit('all_messages_read', { targetId: userId });
+            }
+        } catch (err) {}
     });
 });
 
@@ -325,7 +354,8 @@ app.get('/api/messages/:friendId', async (req, res) => {
             senderId: m.senderId,
             targetId: m.targetId,
             content: m.content,
-            timestamp: m.timestamp
+            timestamp: m.timestamp,
+            status: m.status || 'sent'
         }));
         
         res.json({ messages: cleanHistory });

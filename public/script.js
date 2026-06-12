@@ -162,6 +162,7 @@
             
             loadFriends(); // update active class
             loadMessages(f.id);
+            if (socket) socket.emit('mark_all_read', { friendId: f.id });
         }
 
         function backToFriendsList() {
@@ -183,11 +184,45 @@
             if ((m.senderId === activeFriendId && m.targetId === currentUser.id) ||
                 (m.senderId === currentUser.id && m.targetId === activeFriendId)) {
                 const container = document.getElementById('chatMessages');
+                
+                const existing = document.getElementById('msg-' + m.id);
+                if (existing) {
+                    const statusSpan = existing.querySelector('.msg-status');
+                    if (statusSpan && m.senderId === currentUser.id) {
+                        statusSpan.innerText = m.status === 'read' ? '✓✓' : (m.status === 'delivered' ? '✓✓' : '✓');
+                        if (m.status === 'read') statusSpan.classList.add('read');
+                    }
+                    return;
+                }
+
                 const div = document.createElement('div');
                 div.className = 'msg ' + (m.senderId === currentUser.id ? 'sent' : 'recv');
-                div.innerText = m.content;
-                container.appendChild(div);
+                div.id = 'msg-' + m.id;
+                
+                let timeStr = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                let statusHtml = '';
+                if (m.senderId === currentUser.id) {
+                    let ticks = m.status === 'read' ? '✓✓' : (m.status === 'delivered' ? '✓✓' : '✓');
+                    let readClass = m.status === 'read' ? 'read' : '';
+                    statusHtml = `<span class="msg-status ${readClass}">${ticks}</span>`;
+                }
+                
+                div.innerHTML = `
+                    <div>${escapeHtml(m.content)}</div>
+                    <div class="msg-meta">${timeStr} ${statusHtml}</div>
+                `;
+                
+                const typingInd = document.getElementById('typingIndicator');
+                if (typingInd && typingInd.parentNode === container) {
+                    container.insertBefore(div, typingInd);
+                } else {
+                    container.appendChild(div);
+                }
                 container.scrollTop = container.scrollHeight;
+                
+                if (m.senderId === activeFriendId && m.targetId === currentUser.id && socket) {
+                    socket.emit('mark_all_read', { friendId: activeFriendId });
+                }
             }
         }
 
@@ -199,6 +234,12 @@
             socket.emit('send_message', { targetId: activeFriendId, content: text });
             input.value = '';
         }
+
+        document.getElementById('chatInput').addEventListener('input', () => {
+            if (activeFriendId && socket) {
+                socket.emit('typing', { targetId: activeFriendId });
+            }
+        });
 
         function initSocket() {
             if (socket) return;
@@ -234,6 +275,44 @@
                 } else if (message.senderId !== currentUser.id) {
                     // Show notification dot on friend list if not active
                     // Optional enhancement
+                }
+            });
+
+            let typingHideTimer;
+            socket.on('friend_typing', data => {
+                if (data.senderId === activeFriendId) {
+                    const typingInd = document.getElementById('typingIndicator');
+                    if (typingInd) {
+                        typingInd.style.display = 'flex';
+                        const container = document.getElementById('chatMessages');
+                        container.appendChild(typingInd);
+                        container.scrollTop = container.scrollHeight;
+                        
+                        clearTimeout(typingHideTimer);
+                        typingHideTimer = setTimeout(() => {
+                            typingInd.style.display = 'none';
+                        }, 2000);
+                    }
+                }
+            });
+
+            socket.on('message_status_update', data => {
+                const msgDiv = document.getElementById('msg-' + data.messageId);
+                if (msgDiv) {
+                    const statusSpan = msgDiv.querySelector('.msg-status');
+                    if (statusSpan) {
+                        statusSpan.innerText = data.status === 'read' ? '✓✓' : (data.status === 'delivered' ? '✓✓' : '✓');
+                        if (data.status === 'read') statusSpan.classList.add('read');
+                    }
+                }
+            });
+
+            socket.on('all_messages_read', data => {
+                if (activeFriendId === data.targetId) {
+                    document.querySelectorAll('.msg.sent .msg-status').forEach(span => {
+                        span.innerText = '✓✓';
+                        span.classList.add('read');
+                    });
                 }
             });
         }
