@@ -461,6 +461,24 @@
             return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        // ── SOUND NOTIFICATIONS ───────────────────────────────────────────
+        function playTingSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.5);
+            } catch(e) {}
+        }
+
         // Tính toán phản hồi thử thách: SHA-256(pinHash + challenge)
         async function computeChallengeResponse(pin, challenge) {
             const pinHash = await hashPin(pin);
@@ -618,12 +636,25 @@
         });
 
         const dropArea = $('dropArea');
-        dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('dragover'); });
-        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
-        dropArea.addEventListener('drop', e => {
+        let dragCounter = 0;
+        window.addEventListener('dragenter', e => {
+            if (isSending) return;
             e.preventDefault();
-            dropArea.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files);
+            dragCounter++;
+            $('dragOverlay').classList.add('active');
+        });
+        window.addEventListener('dragleave', e => {
+            if (isSending) return;
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter === 0) $('dragOverlay').classList.remove('active');
+        });
+        window.addEventListener('dragover', e => e.preventDefault());
+        window.addEventListener('drop', e => {
+            e.preventDefault();
+            dragCounter = 0;
+            $('dragOverlay').classList.remove('active');
+            if (!isSending && e.dataTransfer.files.length > 0) addFilesToQueue(e.dataTransfer.files);
         });
 
         // ── NÚT "TẠO PHÒNG" ──────────────────────────────────────────────
@@ -745,9 +776,11 @@
                         conn.send({ type: 'session_info', totalFiles: fileQueue.length });
                     } else if (msg.type === 'client_ready') {
                         showStatus('senderStatus', `✅ Bắt đầu truyền ${fileQueue.length} file…`, 'ok');
+                        playTingSound();
                         sendAllFiles(conn);
                     } else if (msg.type === 'resume_request') {
                         showStatus('senderStatus', `✅ Khôi phục truyền từ file ${msg.fileIndex + 1}…`, 'ok');
+                        playTingSound();
                         sendAllFiles(conn, msg.fileIndex, msg.receivedBytes);
                     }
                 });
@@ -816,6 +849,7 @@
             conn.send({ type: 'all_done' });
             isSending = false;
             clearAESKeyCache();
+            playTingSound();
             setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
                 'senderChunkInfo', 100,
                 `✅ Đã gửi ${fileQueue.length} file`,
@@ -1002,9 +1036,11 @@
                     pinAttempts = 0;
                     if (currentRecvFile) {
                         showStatus('receiverStatus', '✅ Xác thực thành công — đang yêu cầu tiếp tục truyền…', 'ok');
+                        playTingSound();
                         receiverConn.send({ type: 'resume_request', fileIndex: currentRecvFile.fileIndex, receivedBytes: currentRecvFile.receivedBytes });
                     } else {
                         showStatus('receiverStatus', '✅ Xác thực thành công — đang chờ file…', 'ok');
+                        playTingSound();
                     }
                 }
 
@@ -1151,6 +1187,7 @@
                         ? `⚠️ Nhận xong: ${ok} file thành công, ${err} file lỗi`
                         : `✅ Đã nhận và tải xuống tất cả ${ok} file!`;
                     showStatus('receiverStatus', msg2, err > 0 ? 'warn' : 'ok');
+                    playTingSound();
                 }
             });
 
