@@ -281,18 +281,22 @@
             let typingHideTimer;
             socket.on('friend_typing', data => {
                 if (data.senderId === activeFriendId) {
-                    const typingInd = document.getElementById('typingIndicator');
-                    if (typingInd) {
-                        typingInd.style.display = 'flex';
-                        const container = document.getElementById('chatMessages');
-                        container.appendChild(typingInd);
-                        container.scrollTop = container.scrollHeight;
-                        
-                        clearTimeout(typingHideTimer);
-                        typingHideTimer = setTimeout(() => {
-                            typingInd.style.display = 'none';
-                        }, 2000);
+                    let typingInd = document.getElementById('typingIndicator');
+                    if (!typingInd) {
+                        typingInd = document.createElement('div');
+                        typingInd.id = 'typingIndicator';
+                        typingInd.className = 'typing-indicator';
+                        typingInd.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
                     }
+                    typingInd.style.display = 'flex';
+                    const container = document.getElementById('chatMessages');
+                    container.appendChild(typingInd);
+                    container.scrollTop = container.scrollHeight;
+                    
+                    clearTimeout(typingHideTimer);
+                    typingHideTimer = setTimeout(() => {
+                        typingInd.style.display = 'none';
+                    }, 2000);
                 }
             });
 
