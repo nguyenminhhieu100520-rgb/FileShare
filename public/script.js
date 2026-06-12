@@ -446,6 +446,14 @@
             return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        async function calculateHash(blob) {
+            const buffer = await blob.arrayBuffer();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex;
+        }
+
         // Sinh thách thức ngẫu nhiên bảo mật (challenge)
         function generateRandomChallenge() {
             const array = new Uint8Array(16);
@@ -805,29 +813,37 @@
 
         // ── GỬI MỘT FILE (STREAMING & BACKPRESSURE) ────────────────────────
         function sendOneFile(conn, qf, fileIndex, onProgress, pin, resumeOffset = 0) {
-            return new Promise((resolve, reject) => {
-                const file = qf.file;
-                adaptiveChunk.size = 64 * 1024;
-                speedMeter.bytes = 0;
-                speedMeter.windowStart = Date.now();
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const file = qf.file;
+                    adaptiveChunk.size = 64 * 1024;
+                    speedMeter.bytes = 0;
+                    speedMeter.windowStart = Date.now();
 
-                const totalChunks = Math.ceil(file.size / adaptiveChunk.size);
-                const saltHex = generateRandomChallenge(); // Sinh Salt động cho file này
+                    if (!qf.originalHash) {
+                        showStatus('senderStatus', `⏳ Đang quét mã Hash SHA-256 cho file ${qf.name}...`, 'warn');
+                        qf.originalHash = await calculateHash(file);
+                        showStatus('senderStatus', `✅ Bắt đầu gửi file ${qf.name}...`, 'ok');
+                    }
 
-                conn.send({
-                    type: 'file_header',
-                    fileName: qf.name,
-                    fileSize: file.size,
-                    totalChunks,
-                    fileIndex,
-                    encrypted: true,
-                    salt: saltHex,
-                    resumeOffset: resumeOffset
-                });
+                    const totalChunks = Math.ceil(file.size / adaptiveChunk.size);
+                    const saltHex = generateRandomChallenge(); // Sinh Salt động cho file này
 
-                let offset = resumeOffset;
-                let bytesSent = resumeOffset;
-                let chunkIndex = Math.floor(resumeOffset / adaptiveChunk.size);
+                    conn.send({
+                        type: 'file_header',
+                        fileName: qf.name,
+                        fileSize: file.size,
+                        totalChunks,
+                        fileIndex,
+                        encrypted: true,
+                        salt: saltHex,
+                        resumeOffset: resumeOffset,
+                        originalHash: qf.originalHash
+                    });
+
+                    let offset = resumeOffset;
+                    let bytesSent = resumeOffset;
+                    let chunkIndex = Math.floor(resumeOffset / adaptiveChunk.size);
 
                 const dc = conn._dc || conn.dataChannel || null;
 
@@ -901,6 +917,9 @@
                 }
 
                 sendNext();
+                } catch (err) {
+                    reject(err);
+                }
             });
         }
 
@@ -1002,6 +1021,7 @@
                         fileIndex: msg.fileIndex,
                         encrypted: msg.encrypted === true,
                         salt: msg.salt,
+                        originalHash: msg.originalHash
                     };
                     recvExpectedTotal += msg.fileSize;
 
@@ -1073,6 +1093,19 @@
                         const blob = new Blob(cf.chunks);
                         const fileInfo = recvFiles[cf.fileIndex];
 
+                        showStatus('receiverStatus', `⏳ Đang xác thực SHA-256 cho file: ${cf.name}...`, 'warn');
+                        const receivedHash = await calculateHash(blob);
+                        if (receivedHash === cf.originalHash) {
+                            fileInfo.verified = true;
+                            showStatus('receiverStatus', `✅ Đã tải và xác thực nguyên vẹn: ${cf.name}`, 'ok');
+                        } else {
+                            fileInfo.verified = false;
+                            fileInfo.status = 'err';
+                            showStatus('receiverStatus', `❌ Lỗi xác thực toàn vẹn: ${cf.name}`, 'err');
+                            renderRecvList();
+                            return; // Không tải xuống nếu file hỏng
+                        }
+
                         fileInfo.status = 'ok';
                         renderRecvList();
 
@@ -1082,7 +1115,6 @@
                         document.body.appendChild(a); a.click();
                         document.body.removeChild(a);
                         URL.revokeObjectURL(url);
-                        showStatus('receiverStatus', `✅ Đã tải: ${cf.name}`, 'ok');
                     });
                 }
 
@@ -1128,8 +1160,8 @@
             <span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📥'}</span>
             <span class="r-name" title="${safeName}">${safeName}</span>
             <span class="r-size">${formatBytes(f.size)}</span>
-            <span class="r-badge ${f.status === 'ok' ? 'ok' : f.status === 'err' ? 'err' : 'cur'}">
-                ${f.status === 'ok' ? 'Đã tải' : f.status === 'err' ? 'Lỗi' : 'Đang nhận'}
+            <span class="r-badge ${f.status === 'ok' ? (f.verified ? 'ok' : 'ok') : f.status === 'err' ? 'err' : 'cur'}">
+                ${f.status === 'ok' ? (f.verified ? '🛡️ Đã xác thực' : 'Đã tải') : f.status === 'err' ? 'Lỗi' : 'Đang nhận'}
             </span>
         `;
                 list.appendChild(el);
