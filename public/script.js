@@ -260,6 +260,11 @@
             windowStart: 0,
             lastKBps: 0,
         };
+        const recvSpeedMeter = {
+            bytes: 0,
+            windowStart: 0,
+            lastKBps: 0,
+        };
 
         // ── STATE SENDER ─────────────────────────────────────────────────
         let fileQueue = [];
@@ -405,6 +410,18 @@
             if (b < 1024) return b + ' B';
             if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
             return (b / 1048576).toFixed(2) + ' MB';
+        }
+
+        function formatSpeed(kbps) {
+            if (kbps < 1024) return kbps + ' KB/s';
+            return (kbps / 1024).toFixed(1) + ' MB/s';
+        }
+
+        function formatETA(seconds) {
+            if (!isFinite(seconds) || seconds < 0) return '--:--';
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
         }
 
         function setProgress(wrapId, barId, labelId, chunkId, pct, label, extra, done = false) {
@@ -734,13 +751,18 @@
                 try {
                     await sendOneFile(conn, qf, i, (bytesSent) => {
                         const overall = Math.round((bytesSentTotal + bytesSent) / totalBytes * 100);
-                        const speedTxt = speedMeter.lastKBps > 0
-                            ? ` · ${speedMeter.lastKBps} KB/s · chunk ${adaptiveChunk.size / 1024 | 0}KB`
-                            : '';
+                        let speedTxt = '';
+                        let etaTxt = '';
+                        if (speedMeter.lastKBps > 0) {
+                            const remainingBytes = totalBytes - (bytesSentTotal + bytesSent);
+                            const remainingSecs = remainingBytes / (speedMeter.lastKBps * 1024);
+                            speedTxt = ` · ${formatSpeed(speedMeter.lastKBps)}`;
+                            etaTxt = ` · ⏳ ${formatETA(remainingSecs)}`;
+                        }
                         setProgress('senderProgressWrap', 'senderProgressBar', 'senderProgressLabel',
                             'senderChunkInfo', overall,
                             `📤 File ${i + 1}/${fileQueue.length}: ${qf.name}`,
-                            `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}`
+                            `${formatBytes(bytesSentTotal + bytesSent)} / ${formatBytes(totalBytes)}${speedTxt}${etaTxt}`
                         );
                     }, pin);
 
@@ -929,6 +951,9 @@
                 // Session metadata
                 else if (msg.type === 'session_info') {
                     recvExpectedTotal = 0;
+                    recvSpeedMeter.bytes = 0;
+                    recvSpeedMeter.windowStart = Date.now();
+                    recvSpeedMeter.lastKBps = 0;
                     showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
                 }
 
@@ -975,13 +1000,31 @@
                         targetFile.receivedBytes += chunkData.byteLength;
                         recvTotalBytes += chunkData.byteLength;
 
+                        recvSpeedMeter.bytes += chunkData.byteLength;
+                        const now = Date.now();
+                        const elapsed = now - recvSpeedMeter.windowStart;
+                        if (elapsed >= 500) {
+                            recvSpeedMeter.lastKBps = Math.round(recvSpeedMeter.bytes / elapsed);
+                            recvSpeedMeter.bytes = 0;
+                            recvSpeedMeter.windowStart = now;
+                        }
+                        
+                        let speedTxt = '';
+                        let etaTxt = '';
+                        if (recvSpeedMeter.lastKBps > 0) {
+                            const remainingBytes = recvExpectedTotal - recvTotalBytes;
+                            const remainingSecs = remainingBytes / (recvSpeedMeter.lastKBps * 1024);
+                            speedTxt = ` · ${formatSpeed(recvSpeedMeter.lastKBps)}`;
+                            etaTxt = ` · ⏳ ${formatETA(remainingSecs)}`;
+                        }
+
                         const overallPct = recvExpectedTotal > 0
                             ? Math.round(recvTotalBytes / recvExpectedTotal * 100)
                             : 0;
                         setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
                             'receiverChunkInfo', overallPct,
                             `📥 File ${targetFile.fileIndex + 1}: ${targetFile.name}`,
-                            `${formatBytes(recvTotalBytes)} / ${formatBytes(recvExpectedTotal)}`
+                            `${formatBytes(recvTotalBytes)} / ${formatBytes(recvExpectedTotal)}${speedTxt}${etaTxt}`
                         );
                     });
                 }
