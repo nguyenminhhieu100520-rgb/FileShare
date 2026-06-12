@@ -1,15 +1,15 @@
 :root {
-            --bg: #0d1117;
-            --surface: #161b22;
-            --surface2: #21262d;
-            --border: #30363d;
-            --blue: #58a6ff;
-            --blue-dim: #1f6feb;
-            --green: #3fb950;
-            --red: #f85149;
-            --yellow: #e3b341;
-            --text: #e6edf3;
-            --text-muted: #8b949e;
+            --bg: #f0f8ff; /* Xanh da trời rất nhạt */
+            --surface: #ffffff; /* Trắng cho các thẻ/bảng */
+            --surface2: #e1effe; /* Xanh da trời nhạt làm nền nhấn */
+            --border: #c3ddfd; /* Viền xanh dương nhạt */
+            --blue: #1c64f2; /* Xanh dương đậm làm điểm nhấn/text */
+            --blue-dim: #3f83f8; /* Xanh dương cho nút bấm */
+            --green: #0e9f6e;
+            --red: #f05252;
+            --yellow: #e3a008;
+            --text: #1f2937; /* Chữ màu tối */
+            --text-muted: #6b7280; /* Chữ mờ màu xám */
             --radius: 12px;
         }
 
@@ -32,8 +32,8 @@
             position: fixed;
             inset: 0;
             background-image:
-                linear-gradient(rgba(88, 166, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(88, 166, 255, 0.03) 1px, transparent 1px);
+                linear-gradient(rgba(28, 100, 242, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(28, 100, 242, 0.06) 1px, transparent 1px);
             background-size: 40px 40px;
             pointer-events: none;
             z-index: 0;
