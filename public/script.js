@@ -314,9 +314,9 @@
         
         window.toggleEmojiPicker = function() {
             const picker = document.getElementById('emojiPicker');
-            if (picker.style.display === 'none' || picker.innerHTML.trim() === '') {
+            if (picker.style.display === 'none') {
                 picker.style.display = 'grid';
-                if (picker.innerHTML.trim() === '') {
+                if (picker.childElementCount === 0) {
                     picker.innerHTML = EMOJIS.map(e => `<span onclick="insertEmoji('${e}')">${e}</span>`).join('');
                 }
             } else {
