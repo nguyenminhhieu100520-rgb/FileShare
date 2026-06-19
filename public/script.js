@@ -620,6 +620,169 @@
 
         function clearAESKeyCache() { _aesKeyCache = null; }
 
+        // ══════════════════════════════════════════════════════════════════
+        //  CUSTOM MALWARE SCANNER MODULE (Lớp 4)
+        // ══════════════════════════════════════════════════════════════════
+        const CustomMalwareScanner = {
+            // Danh sách đuôi file nguy hiểm (có thể chứa mã thực thi)
+            dangerousExtensions: [
+                '.exe', '.bat', '.cmd', '.com', '.vbs', '.vbe', '.jse',
+                '.wsf', '.wsh', '.msi', '.msp', '.scr', '.cpl', '.hta',
+                '.inf', '.reg', '.ps1', '.lnk', '.pif', '.dll', '.sys'
+            ],
+
+            // Chữ ký Magic Bytes của các định dạng file phổ biến
+            magicSignatures: [
+                { bytes: [0x4D, 0x5A], type: 'exe', name: 'Windows Executable (MZ)' },
+                { bytes: [0x7F, 0x45, 0x4C, 0x46], type: 'elf', name: 'Linux Executable (ELF)' },
+                { bytes: [0xFF, 0xD8, 0xFF], type: 'jpg', name: 'JPEG Image' },
+                { bytes: [0x89, 0x50, 0x4E, 0x47], type: 'png', name: 'PNG Image' },
+                { bytes: [0x47, 0x49, 0x46], type: 'gif', name: 'GIF Image' },
+                { bytes: [0x25, 0x50, 0x44, 0x46], type: 'pdf', name: 'PDF Document' },
+                { bytes: [0x50, 0x4B, 0x03, 0x04], type: 'zip', name: 'ZIP/Office Archive' },
+                { bytes: [0x52, 0x61, 0x72, 0x21], type: 'rar', name: 'RAR Archive' },
+                { bytes: [0x37, 0x7A, 0xBC, 0xAF], type: '7z', name: '7-Zip Archive' },
+                { bytes: [0x1A, 0x45, 0xDF, 0xA3], type: 'webm', name: 'WebM/MKV Video' },
+                { bytes: [0x49, 0x44, 0x33], type: 'mp3', name: 'MP3 Audio (ID3)' },
+            ],
+
+            // Ánh xạ đuôi file → loại Magic Bytes kỳ vọng
+            extensionExpected: {
+                '.jpg': ['jpg'], '.jpeg': ['jpg'], '.png': ['png'], '.gif': ['gif'],
+                '.pdf': ['pdf'], '.zip': ['zip'], '.docx': ['zip'], '.xlsx': ['zip'],
+                '.pptx': ['zip'], '.rar': ['rar'], '.7z': ['7z'], '.webm': ['webm'],
+                '.mkv': ['webm'], '.mp3': ['mp3'],
+            },
+
+            // Chuỗi mẫu nguy hiểm trong file văn bản
+            dangerousPatterns: [
+                { re: /eval\s*\(\s*atob/gi, name: 'eval(atob()) — Thực thi mã ẩn Base64' },
+                { re: /WScript\.Shell/gi, name: 'WScript.Shell — Shell Windows' },
+                { re: /ActiveXObject/gi, name: 'ActiveXObject — Đối tượng COM' },
+                { re: /powershell\s*[\-\/]e/gi, name: 'PowerShell encoded command' },
+                { re: /cmd\s*\/[ck]/gi, name: 'CMD command execution' },
+                { re: /document\.write\s*\(\s*unescape/gi, name: 'document.write(unescape()) — Obfuscated injection' },
+                { re: /fromCharCode\s*\(/gi, name: 'String.fromCharCode — Obfuscation' },
+                { re: /CreateObject/gi, name: 'CreateObject — VBS Object Creation' },
+                { re: /Shell\.Application/gi, name: 'Shell.Application — Shell access' },
+                { re: /HKEY_|RegWrite|RegRead/gi, name: 'Registry manipulation' },
+                { re: /new\s+Function\s*\(/gi, name: 'new Function() — Dynamic code execution' },
+                { re: /\.ShellExecute/gi, name: 'ShellExecute — Chạy chương trình' },
+            ],
+
+            // Ký tự Unicode dùng để giả mạo tên file
+            spoofingChars: [
+                '\u202E', '\u200F', '\u200E', '\u2066', '\u2067',
+                '\u2068', '\u2069', '\u202A', '\u202B', '\u202C', '\u202D'
+            ],
+
+            // ── HÀM QUÉT CHÍNH ──
+            async scan(blob, fileName) {
+                const results = { safe: true, threats: [], details: [] };
+
+                // 4a: Kiểm tra đuôi file
+                const extResult = this._checkExtension(fileName);
+                results.details.push(extResult);
+                if (!extResult.safe) { results.safe = false; results.threats.push(extResult); }
+
+                // 4b: Kiểm tra Magic Bytes
+                const magicResult = await this._checkMagicBytes(blob, fileName);
+                results.details.push(magicResult);
+                if (!magicResult.safe) { results.safe = false; results.threats.push(magicResult); }
+
+                // 4c: Kiểm tra Unicode ẩn trong tên file
+                const unicodeResult = this._checkUnicode(fileName);
+                results.details.push(unicodeResult);
+                if (!unicodeResult.safe) { results.safe = false; results.threats.push(unicodeResult); }
+
+                // 4d: Quét nội dung file văn bản (< 5MB)
+                const contentResult = await this._checkContent(blob, fileName);
+                results.details.push(contentResult);
+                if (!contentResult.safe) { results.safe = false; results.threats.push(contentResult); }
+
+                return results;
+            },
+
+            _checkExtension(fileName) {
+                const ext = ('.' + fileName.split('.').pop()).toLowerCase();
+                const parts = fileName.split('.');
+                const hasDblExt = parts.length > 2 && this.dangerousExtensions.includes(('.' + parts[parts.length - 1]).toLowerCase());
+                if (this.dangerousExtensions.includes(ext)) {
+                    return { layer: '4a', name: 'Kiểm tra đuôi file', safe: false, message: `Đuôi "${ext}" là định dạng thực thi nguy hiểm` };
+                }
+                if (hasDblExt) {
+                    return { layer: '4a', name: 'Kiểm tra đuôi file', safe: false, message: `Đuôi kép đáng ngờ: "${fileName}"` };
+                }
+                return { layer: '4a', name: 'Kiểm tra đuôi file', safe: true, message: `Đuôi "${ext}" an toàn` };
+            },
+
+            async _checkMagicBytes(blob, fileName) {
+                const ext = ('.' + fileName.split('.').pop()).toLowerCase();
+                const header = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+                const magicHex = Array.from(header.slice(0, 8)).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+
+                // Phát hiện loại file thực tế từ Magic Bytes
+                let detected = null;
+                for (const sig of this.magicSignatures) {
+                    if (sig.bytes.every((b, i) => header[i] === b)) { detected = sig; break; }
+                }
+
+                // File thực thi giả mạo đuôi an toàn
+                if (detected && (detected.type === 'exe' || detected.type === 'elf')) {
+                    if (!this.dangerousExtensions.includes(ext)) {
+                        return { layer: '4b', name: 'Kiểm tra Magic Bytes', safe: false, message: `GIẢ MẠO! Đuôi "${ext}" nhưng thực tế là ${detected.name}` };
+                    }
+                }
+
+                // Đuôi file có Magic Bytes kỳ vọng nhưng không khớp
+                const expected = this.extensionExpected[ext];
+                if (expected && detected && !expected.includes(detected.type)) {
+                    return { layer: '4b', name: 'Kiểm tra Magic Bytes', safe: false, message: `Magic Bytes không khớp! Đuôi "${ext}" nhưng nội dung là ${detected.name}` };
+                }
+
+                return { layer: '4b', name: 'Kiểm tra Magic Bytes', safe: true, message: `[${magicHex}] ${detected ? '→ ' + detected.name + ' — ' : ''}khớp đuôi file` };
+            },
+
+            _checkUnicode(fileName) {
+                for (const ch of this.spoofingChars) {
+                    if (fileName.includes(ch)) {
+                        return { layer: '4c', name: 'Kiểm tra Unicode ẩn', safe: false, message: `Tên file chứa ký tự Unicode ẩn (U+${ch.codePointAt(0).toString(16).toUpperCase()}) dùng giả mạo tên!` };
+                    }
+                }
+                return { layer: '4c', name: 'Kiểm tra Unicode ẩn', safe: true, message: 'Tên file sạch, không có Unicode ẩn' };
+            },
+
+            async _checkContent(blob, fileName) {
+                const textExts = ['.txt', '.html', '.htm', '.js', '.css', '.json', '.xml', '.svg',
+                    '.bat', '.cmd', '.ps1', '.vbs', '.vbe', '.wsf', '.hta', '.csv',
+                    '.md', '.yml', '.yaml', '.ini', '.cfg', '.sh', '.py', '.php'];
+                const ext = ('.' + fileName.split('.').pop()).toLowerCase();
+
+                if (!textExts.includes(ext)) {
+                    return { layer: '4d', name: 'Quét nội dung', safe: true, message: 'Không phải file văn bản — bỏ qua' };
+                }
+                if (blob.size > 5 * 1024 * 1024) {
+                    return { layer: '4d', name: 'Quét nội dung', safe: true, message: 'File > 5MB — bỏ qua quét nội dung' };
+                }
+
+                try {
+                    const text = await blob.text();
+                    const found = [];
+                    for (const { re, name } of this.dangerousPatterns) {
+                        re.lastIndex = 0;
+                        const m = text.match(re);
+                        if (m && m.length > 0) found.push(`${name} (×${m.length})`);
+                    }
+                    if (found.length > 0) {
+                        return { layer: '4d', name: 'Quét nội dung', safe: false, message: `Phát hiện ${found.length} mẫu nguy hiểm: ${found.join('; ')}` };
+                    }
+                    return { layer: '4d', name: 'Quét nội dung', safe: true, message: 'Không tìm thấy mẫu nguy hiểm' };
+                } catch (e) {
+                    return { layer: '4d', name: 'Quét nội dung', safe: true, message: 'Không đọc được nội dung (binary)' };
+                }
+            }
+        };
+
         async function loadConfig() {
             try { const r = await fetch('/config'); return await r.json(); }
             catch { return { peerHost: 'localhost', peerPort: 9000, peerPath: '/peerjs', secure: false }; }
@@ -1027,10 +1190,15 @@
                             const plainChunk = await slice.arrayBuffer(); // Đọc dung lượng nhỏ vào RAM
                             const chunkBytes = end - offset;
 
+                            // Lớp 2: Tính hash SHA-256 cho chunk trước khi mã hóa
+                            const chunkHashBuf = await crypto.subtle.digest('SHA-256', plainChunk);
+                            const chunkHash = Array.from(new Uint8Array(chunkHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+
                             // Mã hóa chunk qua AES-GCM với muối động
                             const encryptedChunk = await encryptChunk(pin, plainChunk, saltHex);
 
-                            conn.send({ type: 'file_chunk', index: chunkIndex, data: encryptedChunk });
+                            // Gửi chunk mã hóa kèm hash để receiver xác thực từng chunk
+                            conn.send({ type: 'file_chunk', index: chunkIndex, data: encryptedChunk, chunkHash });
 
                             offset += chunkBytes;
                             bytesSent += chunkBytes;
@@ -1170,6 +1338,8 @@
                     if (!currentRecvFile) return;
                     const targetFile = currentRecvFile;
                     const rawData = msg.data;
+                    const receivedChunkHash = msg.chunkHash;
+                    const chunkIdx = msg.index;
                     const isEncrypted = targetFile.encrypted;
                     const pinVal = $('receiverPin').value.trim();
                     const saltVal = targetFile.salt;
@@ -1181,6 +1351,21 @@
                                 chunkData = await decryptChunk(pinVal, rawData, saltVal);
                             } catch (err) {
                                 showStatus('receiverStatus', '❌ Giải mã thất bại — sai PIN hoặc dữ liệu lỗi', 'err');
+                                return;
+                            }
+                        }
+
+                        // ── LỚP 2: XÁC THỰC HASH TỪNG CHUNK ──
+                        if (receivedChunkHash) {
+                            const verifyBuf = await crypto.subtle.digest('SHA-256', chunkData);
+                            const verifyHash = Array.from(new Uint8Array(verifyBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+                            if (verifyHash !== receivedChunkHash) {
+                                showStatus('receiverStatus', `🚨 CHUNK #${chunkIdx} BỊ SỬA ĐỔI! Hash không khớp — Đang hủy file...`, 'err');
+                                targetFile.chunks = [];
+                                targetFile.receivedBytes = 0;
+                                currentRecvFile = null;
+                                if (receiverConn) receiverConn.close();
+                                playTingSound();
                                 return;
                             }
                         }
@@ -1235,7 +1420,7 @@
                             if (cf.type.startsWith('image/') || cf.type.startsWith('video/')) {
                                 fileInfo.previewUrl = URL.createObjectURL(blob);
                             }
-                            showStatus('receiverStatus', `✅ Đã tải và xác thực nguyên vẹn: ${cf.name}`, 'ok');
+                            showStatus('receiverStatus', `✅ Hash khớp — Đang quét mã độc: ${cf.name}...`, 'ok');
                         } else {
                             fileInfo.verified = false;
                             fileInfo.status = 'err';
@@ -1244,7 +1429,24 @@
                             return; // Không tải xuống nếu file hỏng
                         }
 
+                        // ── LỚP 4: QUÉT MÃ ĐỘC ──
+                        showStatus('receiverStatus', `🔍 Đang quét mã độc cho file: ${cf.name}...`, 'warn');
+                        const scanResult = await CustomMalwareScanner.scan(blob, cf.name);
+                        fileInfo.scanResult = scanResult;
+
+                        if (!scanResult.safe) {
+                            // ❌ PHÁT HIỆN MÃ ĐỘC → Chặn tải xuống
+                            fileInfo.status = 'malware';
+                            const threatNames = scanResult.threats.map(t => t.message).join(' | ');
+                            showStatus('receiverStatus', `🚨 PHÁT HIỆN NGUY HIỂM: ${cf.name} — ${threatNames}`, 'err');
+                            playTingSound();
+                            renderRecvList();
+                            return; // CHẶN — không tải xuống
+                        }
+
+                        // ✅ File an toàn → Cho phép tải xuống
                         fileInfo.status = 'ok';
+                        showStatus('receiverStatus', `✅ An toàn — Đang tải xuống: ${cf.name}`, 'ok');
                         renderRecvList();
 
                         const url = URL.createObjectURL(blob);
@@ -1261,15 +1463,22 @@
                     clearAESKeyCache();
                     const ok = recvFiles.filter(f => f.status === 'ok').length;
                     const err = recvFiles.filter(f => f.status === 'err').length;
+                    const malware = recvFiles.filter(f => f.status === 'malware').length;
+                    const totalIssues = err + malware;
                     setProgress('receiverProgressWrap', 'receiverProgressBar', 'receiverProgressLabel',
                         'receiverChunkInfo', 100,
-                        `✅ Nhận xong ${ok} file${err > 0 ? ` (${err} lỗi)` : ''}`,
+                        `✅ Nhận xong ${ok} file${totalIssues > 0 ? ` (${err} lỗi, ${malware} mã độc)` : ''}`,
                         formatBytes(recvTotalBytes), true
                     );
-                    const msg2 = err > 0
-                        ? `⚠️ Nhận xong: ${ok} file thành công, ${err} file lỗi`
-                        : `✅ Đã nhận và tải xuống tất cả ${ok} file!`;
-                    showStatus('receiverStatus', msg2, err > 0 ? 'warn' : 'ok');
+                    let msg2;
+                    if (malware > 0) {
+                        msg2 = `🚨 Nhận xong: ${ok} an toàn, ${malware} file phát hiện mã độc đã bị chặn!`;
+                    } else if (err > 0) {
+                        msg2 = `⚠️ Nhận xong: ${ok} file thành công, ${err} file lỗi`;
+                    } else {
+                        msg2 = `✅ Đã nhận, quét an toàn và tải xuống tất cả ${ok} file!`;
+                    }
+                    showStatus('receiverStatus', msg2, totalIssues > 0 ? (malware > 0 ? 'err' : 'warn') : 'ok');
                     playTingSound();
                 }
             });
@@ -1292,11 +1501,11 @@
             list.innerHTML = '';
             recvFiles.forEach((f, i) => {
                 const el = document.createElement('div');
-                el.className = `recv-item ${f.status === 'ok' ? 'verified' : f.status === 'err' ? 'bad' : 'receiving'}`;
+                el.className = `recv-item ${f.status === 'ok' ? 'verified' : (f.status === 'malware' || f.status === 'err') ? 'bad' : 'receiving'}`;
                 el.id = `ri-${i}`;
                 const safeName = escapeHtml(f.name);
 
-                let iconHtml = `<span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'err' ? '❌' : '📥'}</span>`;
+                let iconHtml = `<span style="font-size:0.9rem">${f.status === 'ok' ? '✅' : f.status === 'malware' ? '🚨' : f.status === 'err' ? '❌' : '📥'}</span>`;
                 if (f.previewUrl) {
                     if (f.type.startsWith('image/')) {
                         iconHtml = `<img src="${f.previewUrl}" class="preview-img" alt="img" style="width:24px;height:24px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:8px;">`;
@@ -1305,13 +1514,27 @@
                     }
                 }
 
+                let badgeClass = f.status === 'ok' ? 'ok' : (f.status === 'malware' || f.status === 'err') ? 'err' : 'cur';
+                let badgeText = f.status === 'ok' ? '🛡️ An toàn' : f.status === 'malware' ? '🚨 Mã độc!' : f.status === 'err' ? 'Lỗi' : 'Đang nhận';
+
+                // Hiển thị chi tiết kết quả quét mã độc
+                let scanHtml = '';
+                if (f.scanResult && f.scanResult.details) {
+                    scanHtml = '<div style="width:100%;margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,0.2);font-size:0.72rem;line-height:1.6;">';
+                    f.scanResult.details.forEach(d => {
+                        const ico = d.safe ? '✅' : '❌';
+                        const clr = d.safe ? 'var(--green, #3fb950)' : 'var(--red, #f85149)';
+                        scanHtml += `<div style="color:${clr}">${ico} ${escapeHtml(d.name)}: ${escapeHtml(d.message)}</div>`;
+                    });
+                    scanHtml += '</div>';
+                }
+
                 el.innerHTML = `
             ${iconHtml}
             <span class="r-name" title="${safeName}">${safeName}</span>
             <span class="r-size">${formatBytes(f.size)}</span>
-            <span class="r-badge ${f.status === 'ok' ? (f.verified ? 'ok' : 'ok') : f.status === 'err' ? 'err' : 'cur'}">
-                ${f.status === 'ok' ? (f.verified ? '🛡️ Đã xác thực' : 'Đã tải') : f.status === 'err' ? 'Lỗi' : 'Đang nhận'}
-            </span>
+            <span class="r-badge ${badgeClass}">${badgeText}</span>
+            ${scanHtml}
         `;
                 list.appendChild(el);
             });
