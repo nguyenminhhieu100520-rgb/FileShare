@@ -257,12 +257,29 @@
                             </div>
                             <!-- Messages -->
                         </div>
-                        <div class="chat-input" id="chatInputArea" style="visibility:hidden">
-                            <input type="text" id="chatInput" class="pin-input" placeholder="Nhập tin nhắn..."
-                                style="letter-spacing:normal; flex:1"
-                                onkeypress="if(event.key==='Enter') sendMessage()">
-                            <button class="btn btn-primary btn-sm" onclick="sendMessage()"
-                                style="padding:0 20px">Gửi</button>
+                        <div class="chat-input-wrapper" id="chatInputArea" style="visibility:hidden">
+                            <!-- Reply Preview Block -->
+                            <div id="replyPreview" class="reply-preview" style="display:none;">
+                                <div style="flex:1; min-width:0;">
+                                    <div style="font-size:0.75rem; color:var(--blue); font-weight:bold;">Đang trả lời</div>
+                                    <div id="replyPreviewText" style="font-size:0.85rem; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 100%;"></div>
+                                </div>
+                                <button onclick="cancelReply()" class="reply-cancel-btn">✕</button>
+                            </div>
+                            
+                            <!-- Emoji Picker Popover -->
+                            <div id="emojiPicker" class="emoji-picker" style="display:none;">
+                                <!-- Emojis injected by JS -->
+                            </div>
+
+                            <div class="chat-input">
+                                <button class="emoji-btn" onclick="toggleEmojiPicker()" title="Chèn Emoji">😀</button>
+                                <input type="text" id="chatInput" class="pin-input" placeholder="Nhập tin nhắn..."
+                                    style="letter-spacing:normal; flex:1"
+                                    onkeypress="if(event.key==='Enter') sendMessage()">
+                                <button class="btn btn-primary btn-sm" onclick="sendMessage()"
+                                    style="padding:0 20px">Gửi</button>
+                            </div>
                         </div>
                     </div>
                 </div>

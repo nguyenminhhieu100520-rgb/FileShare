@@ -176,64 +176,159 @@
             const data = await res.json();
             const container = document.getElementById('chatMessages');
             container.innerHTML = '';
-            data.messages.forEach(m => appendMessage(m));
+            
+            // Lưu trữ tin nhắn để dễ lookup khi reply
+            window.messageCache = window.messageCache || {};
+            
+            data.messages.forEach(m => {
+                window.messageCache[m.id] = m;
+                appendMessage(m);
+            });
             container.scrollTop = container.scrollHeight;
         }
 
         function appendMessage(m) {
+            // Cache lại tin nhắn
+            window.messageCache = window.messageCache || {};
+            window.messageCache[m.id] = m;
+
             if ((m.senderId === activeFriendId && m.targetId === currentUser.id) ||
                 (m.senderId === currentUser.id && m.targetId === activeFriendId)) {
                 const container = document.getElementById('chatMessages');
                 
-                const existing = document.getElementById('msg-' + m.id);
-                if (existing) {
-                    const statusSpan = existing.querySelector('.msg-status');
-                    if (statusSpan && m.senderId === currentUser.id) {
+                const existingWrapper = document.getElementById('msg-wrapper-' + m.id);
+                if (existingWrapper) {
+                    const statusSpan = existingWrapper.querySelector('.msg-status');
+                    if (statusSpan && m.senderId === currentUser.id && !m.isDeleted) {
                         statusSpan.innerText = m.status === 'read' ? '✓✓' : (m.status === 'delivered' ? '✓✓' : '✓');
                         if (m.status === 'read') statusSpan.classList.add('read');
                     }
                     return;
                 }
 
+                const wrapper = document.createElement('div');
+                wrapper.className = 'msg-wrapper';
+                wrapper.id = 'msg-wrapper-' + m.id;
+                // Align wrapper based on sender
+                wrapper.style.alignSelf = (m.senderId === currentUser.id) ? 'flex-end' : 'flex-start';
+                
+                // Khối tin nhắn
                 const div = document.createElement('div');
                 div.className = 'msg ' + (m.senderId === currentUser.id ? 'sent' : 'recv');
                 div.id = 'msg-' + m.id;
-                
-                let timeStr = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                let statusHtml = '';
-                if (m.senderId === currentUser.id) {
-                    let ticks = m.status === 'read' ? '✓✓' : (m.status === 'delivered' ? '✓✓' : '✓');
-                    let readClass = m.status === 'read' ? 'read' : '';
-                    statusHtml = `<span class="msg-status ${readClass}">${ticks}</span>`;
+
+                if (m.isDeleted) {
+                    div.classList.add('deleted');
+                    div.innerHTML = `<em>Tin nhắn đã được thu hồi</em>`;
+                } else {
+                    let timeStr = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    let statusHtml = '';
+                    if (m.senderId === currentUser.id) {
+                        let ticks = m.status === 'read' ? '✓✓' : (m.status === 'delivered' ? '✓✓' : '✓');
+                        let readClass = m.status === 'read' ? 'read' : '';
+                        statusHtml = `<span class="msg-status ${readClass}">${ticks}</span>`;
+                    }
+                    
+                    let replyHtml = '';
+                    if (m.replyTo && window.messageCache[m.replyTo]) {
+                        const originalMsg = window.messageCache[m.replyTo];
+                        const origText = originalMsg.isDeleted ? "Tin nhắn đã được thu hồi" : escapeHtml(originalMsg.content);
+                        replyHtml = `<div class="msg-reply-block">${origText}</div>`;
+                    }
+
+                    div.innerHTML = `
+                        ${replyHtml}
+                        <div>${escapeHtml(m.content)}</div>
+                        <div class="msg-meta">${timeStr} ${statusHtml}</div>
+                    `;
                 }
-                
-                div.innerHTML = `
-                    <div>${escapeHtml(m.content)}</div>
-                    <div class="msg-meta">${timeStr} ${statusHtml}</div>
-                `;
+
+                wrapper.appendChild(div);
+
+                // Khối nút thao tác (Chỉ hiện khi chưa xóa)
+                if (!m.isDeleted) {
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'msg-actions';
+                    
+                    // Nút Trả lời cho tất cả tin nhắn
+                    actionsDiv.innerHTML += `<button class="action-btn" onclick="setupReply('${m.id}', '${escapeHtml(m.content).replace(/'/g, "\\'")}')" title="Trả lời">↩️</button>`;
+                    
+                    // Nút Xóa chỉ cho tin nhắn của mình
+                    if (m.senderId === currentUser.id) {
+                        actionsDiv.innerHTML += `<button class="action-btn del-btn" onclick="deleteMessage('${m.id}')" title="Thu hồi">🗑️</button>`;
+                    }
+                    wrapper.appendChild(actionsDiv);
+                }
                 
                 const typingInd = document.getElementById('typingIndicator');
                 if (typingInd && typingInd.parentNode === container) {
-                    container.insertBefore(div, typingInd);
+                    container.insertBefore(wrapper, typingInd);
                 } else {
-                    container.appendChild(div);
+                    container.appendChild(wrapper);
                 }
                 container.scrollTop = container.scrollHeight;
                 
-                if (m.senderId === activeFriendId && m.targetId === currentUser.id && socket) {
+                if (m.senderId === activeFriendId && m.targetId === currentUser.id && socket && !m.isDeleted) {
                     socket.emit('mark_all_read', { friendId: activeFriendId });
                 }
             }
         }
+
+        let replyingToMessageId = null;
+
+        window.setupReply = function(id, text) {
+            replyingToMessageId = id;
+            document.getElementById('replyPreview').style.display = 'flex';
+            document.getElementById('replyPreviewText').innerText = text;
+            document.getElementById('chatInput').focus();
+        };
+
+        window.cancelReply = function() {
+            replyingToMessageId = null;
+            document.getElementById('replyPreview').style.display = 'none';
+        };
+
+        window.deleteMessage = function(messageId) {
+            if (confirm("Bạn có chắc muốn thu hồi tin nhắn này?")) {
+                socket.emit('delete_message', { messageId });
+            }
+        };
 
         function sendMessage() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
             if (!text || !activeFriendId || !socket) return;
             
-            socket.emit('send_message', { targetId: activeFriendId, content: text });
+            socket.emit('send_message', { 
+                targetId: activeFriendId, 
+                content: text,
+                replyTo: replyingToMessageId 
+            });
             input.value = '';
+            cancelReply();
+            document.getElementById('emojiPicker').style.display = 'none';
         }
+
+        // --- EMOJI PICKER LOGIC ---
+        const EMOJIS = ['😀','😂','🥰','😎','😭','🥺','👍','🙏','❤️','🔥','🎉','✨'];
+        
+        window.toggleEmojiPicker = function() {
+            const picker = document.getElementById('emojiPicker');
+            if (picker.style.display === 'none' || picker.innerHTML.trim() === '') {
+                picker.style.display = 'grid';
+                if (picker.innerHTML.trim() === '') {
+                    picker.innerHTML = EMOJIS.map(e => `<span onclick="insertEmoji('${e}')">${e}</span>`).join('');
+                }
+            } else {
+                picker.style.display = 'none';
+            }
+        };
+
+        window.insertEmoji = function(emoji) {
+            const input = document.getElementById('chatInput');
+            input.value += emoji;
+            input.focus();
+        };
 
         document.getElementById('chatInput').addEventListener('input', () => {
             if (activeFriendId && socket) {
@@ -317,6 +412,22 @@
                         span.innerText = '✓✓';
                         span.classList.add('read');
                     });
+                }
+            });
+
+            socket.on('message_deleted', data => {
+                const wrapper = document.getElementById('msg-wrapper-' + data.messageId);
+                if (wrapper) {
+                    const msgDiv = wrapper.querySelector('.msg');
+                    if (msgDiv) {
+                        msgDiv.classList.add('deleted');
+                        msgDiv.innerHTML = `<em>Tin nhắn đã được thu hồi</em>`;
+                    }
+                    const actionsDiv = wrapper.querySelector('.msg-actions');
+                    if (actionsDiv) actionsDiv.remove(); // Xóa nút thao tác vì đã thu hồi
+                }
+                if (window.messageCache && window.messageCache[data.messageId]) {
+                    window.messageCache[data.messageId].isDeleted = true;
                 }
             });
         }

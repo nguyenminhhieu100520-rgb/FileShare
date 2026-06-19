@@ -1116,3 +1116,155 @@ body.dark-mode .card, body.dark-mode .sidebar, body.dark-mode .qr-modal, body.da
 .toast-icon {
     font-size: 1.2rem;
 }
+
+/* -- CHAT ADVANCED FEATURES (REPLY, DELETE, EMOJI) -- */
+
+.chat-input-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+}
+
+.chat-input {
+    border-top: none; /* remove top border since wrapper has it */
+}
+
+/* Reply Preview Block (above input) */
+.reply-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface2);
+    padding: 8px 15px;
+    border-bottom: 1px solid var(--border);
+}
+
+.reply-cancel-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 1rem;
+    padding: 5px;
+}
+.reply-cancel-btn:hover {
+    color: var(--red);
+}
+
+/* Emoji Picker Popover */
+.emoji-picker {
+    position: absolute;
+    bottom: 100%; /* pop up above input */
+    left: 15px;
+    margin-bottom: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+}
+.emoji-picker span {
+    font-size: 1.5rem;
+    cursor: pointer;
+    text-align: center;
+    padding: 5px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+.emoji-picker span:hover {
+    background: var(--surface2);
+}
+.emoji-btn {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0 10px;
+    filter: grayscale(0.2);
+    transition: filter 0.2s, transform 0.2s;
+}
+.emoji-btn:hover {
+    filter: grayscale(0);
+    transform: scale(1.1);
+}
+
+/* Message Actions (Hover to show Delete/Reply) */
+.msg-wrapper {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    max-width: 100%;
+}
+.msg-actions {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.msg.sent + .msg-actions {
+    right: 100%;
+    margin-right: 10px;
+}
+.msg.recv + .msg-actions {
+    left: 100%;
+    margin-left: 10px;
+}
+.msg-wrapper:hover .msg-actions {
+    opacity: 1;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--text-muted);
+    padding: 4px;
+}
+.action-btn:hover {
+    color: var(--blue);
+}
+.action-btn.del-btn:hover {
+    color: var(--red);
+}
+
+/* Reply block inside a message */
+.msg-reply-block {
+    background: rgba(0,0,0,0.1);
+    border-left: 3px solid var(--blue);
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--text);
+    opacity: 0.85;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.dark-mode .msg-reply-block {
+    background: rgba(255,255,255,0.1);
+}
+
+/* Deleted Message Style */
+.msg.deleted {
+    font-style: italic;
+    color: var(--text-muted) !important;
+    background: var(--surface2) !important;
+    border: 1px dashed var(--border);
+}
+.msg.deleted .msg-reply-block {
+    display: none;
+}

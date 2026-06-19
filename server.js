@@ -95,7 +95,9 @@ const messageSchema = new mongoose.Schema({
     targetId: { type: String, required: true },
     content: { type: String, required: true },
     timestamp: { type: Number, required: true },
-    status: { type: String, default: 'sent' }
+    status: { type: String, default: 'sent' },
+    replyTo: { type: String, default: null },
+    isDeleted: { type: Boolean, default: false }
 });
 const Message = mongoose.model('Message', messageSchema);
 
@@ -208,7 +210,7 @@ io.on('connection', async (socket) => {
         const senderId = onlineUsers.get(socket.id);
         if (!senderId) return;
 
-        const { targetId, content } = data;
+        const { targetId, content, replyTo } = data;
         const messageId = crypto.randomUUID();
         const timestamp = Date.now();
         
@@ -219,13 +221,14 @@ io.on('connection', async (socket) => {
             senderId,
             targetId,
             content: encryptedContent,
-            timestamp
+            timestamp,
+            replyTo: replyTo || null
         });
         
         try {
             await messageDoc.save();
             
-            const message = { id: messageId, senderId, targetId, content, timestamp, status: 'sent' };
+            const message = { id: messageId, senderId, targetId, content, timestamp, status: 'sent', replyTo: replyTo || null, isDeleted: false };
             
             // Send to receiver if online
             const targetSocketId = userSockets.get(targetId);
@@ -241,6 +244,36 @@ io.on('connection', async (socket) => {
             socket.emit('receive_message', message);
         } catch (err) {
             console.error('Lỗi lưu tin nhắn:', err);
+        }
+    });
+
+    socket.on('delete_message', async (data) => {
+        const senderId = onlineUsers.get(socket.id);
+        if (!senderId) return;
+
+        try {
+            const { messageId } = data;
+            const message = await Message.findOne({ id: messageId });
+            
+            // Chỉ cho phép người gửi thu hồi tin nhắn của chính họ
+            if (message && message.senderId === senderId) {
+                message.isDeleted = true;
+                // Có thể xóa luôn content trong DB để đảm bảo bảo mật, hoặc giữ lại nội dung mã hóa
+                // Để an toàn, ghi đè nội dung bằng rỗng được mã hóa
+                message.content = encryptMessage('');
+                await message.save();
+
+                // Báo cho chính người xóa
+                socket.emit('message_deleted', { messageId });
+
+                // Báo cho người nhận nếu đang online
+                const targetSocketId = userSockets.get(message.targetId);
+                if (targetSocketId) {
+                    io.to(targetSocketId).emit('message_deleted', { messageId });
+                }
+            }
+        } catch (err) {
+            console.error('Lỗi xóa tin nhắn:', err);
         }
     });
 
@@ -403,9 +436,11 @@ app.get('/api/messages/:friendId', async (req, res) => {
             id: m.id,
             senderId: m.senderId,
             targetId: m.targetId,
-            content: decryptMessage(m.content),
+            content: m.isDeleted ? "" : decryptMessage(m.content),
             timestamp: m.timestamp,
-            status: m.status || 'sent'
+            status: m.status || 'sent',
+            replyTo: m.replyTo,
+            isDeleted: m.isDeleted || false
         }));
         
         res.json({ messages: cleanHistory });
