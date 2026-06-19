@@ -865,7 +865,7 @@
             gap: 10px;
         }
         .msg {
-            max-width: 70%;
+            max-width: 100%;
             padding: 10px 14px;
             border-radius: 16px;
             font-size: 0.9rem;
@@ -1198,7 +1198,7 @@ body.dark-mode .card, body.dark-mode .sidebar, body.dark-mode .qr-modal, body.da
     display: flex;
     flex-direction: column;
     position: relative;
-    max-width: 100%;
+    max-width: 70%;
 }
 .msg-actions {
     position: absolute;
