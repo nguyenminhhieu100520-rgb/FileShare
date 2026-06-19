@@ -10,7 +10,10 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 
 const app = express();
+// Bắt buộc cho Render (PaaS) dùng Reverse Proxy (Nginx/Cloudflare)
 app.set('trust proxy', 1);
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ── SERVER-SIDE ENCRYPTION (CHAT) ─────────────────────────────────
 const CHAT_MASTER_KEY = crypto.createHash('sha256').update(process.env.CHAT_MASTER_KEY || 'FileShare_Master_Key_Secret_123').digest();
@@ -46,12 +49,16 @@ function decryptMessage(encryptedStr) {
 // JSON body parser for REST APIs
 app.use(express.json());
 
-// Session setup
+// Session setup - Tối ưu cho Production (Render)
 const sessionMiddleware = session({
-    secret: 'p2p-file-share-secret-key-123',
+    secret: process.env.SESSION_SECRET || 'p2p-file-share-secret-key-123',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false } // Set true in production with HTTPS
+    cookie: { 
+        secure: isProduction, // Yêu cầu HTTPS trên Render
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 1 ngày
+    }
 });
 app.use(sessionMiddleware);
 
@@ -64,7 +71,12 @@ if (!MONGODB_URI) {
     process.exit(1);
 }
 
-mongoose.connect(MONGODB_URI)
+// Cấu hình tối ưu MongoDB cho Cloud Hosting (Render/Atlas)
+mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000, // Đợi 5s thay vì 30s mặc định
+    socketTimeoutMS: 45000,         // Ngắt kết nối socket nếu không phản hồi
+    maxPoolSize: 10                 // Giới hạn pool để không tốn RAM free tier
+})
     .then(() => console.log('✅ Kết nối MongoDB thành công'))
     .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
 
@@ -259,6 +271,11 @@ io.on('connection', async (socket) => {
 
 // ── REST API ROUTES ───────────────────────────────────────────────
 
+// API Ping để dùng cho UptimeRobot / Cron job tránh Render spin down
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -442,6 +459,16 @@ app.get('/config', rateLimit, (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n✅ Server sẵn sàng tại port ${PORT}`);
+    console.log(`   Môi trường : ${isProduction ? 'Production' : 'Development'}`);
     console.log(`   PeerJS path : /peerjs`);
     console.log(`   Config API  : /config\n`);
+});
+
+// Bắt lỗi toàn cục để không crash ngầm trên Render
+process.on('uncaughtException', (err) => {
+    console.error('❌ Lỗi không kiểm soát (uncaughtException):', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Lỗi Promise bị từ chối (unhandledRejection):', reason);
 });
