@@ -140,7 +140,7 @@ app.use((req, res, next) => {
         `script-src 'self' https://cdnjs.cloudflare.com https://unpkg.com 'unsafe-inline' 'unsafe-eval'; ` +
         `style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; ` +
         `font-src 'self' https://fonts.gstatic.com; ` +
-        `connect-src 'self' ws: wss:; ` +
+        `connect-src 'self' ws: wss: stun: turn: *; ` +
         `img-src 'self' data: blob:; ` +
         `frame-ancestors 'none';`
     );

@@ -1113,7 +1113,33 @@
         // ── INIT PEER (SINGLE INSTANCE) ───────────────────────────────────
         async function initPeer() {
             const cfg = await loadConfig();
-            const opts = { host: cfg.peerHost, port: cfg.peerPort, path: cfg.peerPath, secure: cfg.secure };
+            const opts = { 
+                host: cfg.peerHost, 
+                port: cfg.peerPort, 
+                path: cfg.peerPath, 
+                secure: cfg.secure,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        {
+                            urls: 'turn:openrelay.metered.ca:80',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        }
+                    ]
+                }
+            };
 
             const customId = generateRandomId(10);
             peer = new Peer(customId, opts);
