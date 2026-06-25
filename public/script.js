@@ -1468,10 +1468,18 @@
             }
             lastTargetId = targetId;
 
-            // Dùng thực thể peer chung duy nhất
-            receiverConn = peer.connect(targetId, { reliable: true });
+            // Dùng thực thể peer chung duy nhất (bỏ { reliable: true } vì P2P native SCTP đã reliable)
+            receiverConn = peer.connect(targetId);
+
+            const connTimeout = setTimeout(() => {
+                if (receiverConn && !receiverConn.open) {
+                    showStatus('receiverStatus', '❌ Lỗi mạng: Không thể kết nối (Timeout). Hãy thử lại hoặc dùng mạng khác!', 'err');
+                    receiverConn.close();
+                }
+            }, 15000);
 
             receiverConn.on('open', async () => {
+                clearTimeout(connTimeout);
                 showStatus('receiverStatus', '🔐 Đang kết nối xác thực…', 'warn');
                 // Chờ Sender gửi thử thách (challenge) qua gói tin 'auth_challenge'
             });
