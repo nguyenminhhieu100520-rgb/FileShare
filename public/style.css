@@ -790,6 +790,34 @@
             color: var(--blue);
             border-right: 3px solid var(--blue);
         }
+        
+        /* -- NOTIFICATIONS -- */
+        .badge-notification {
+            background: var(--red);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .notification-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .notification-item .actions {
+            display: flex;
+            gap: 8px;
+        }
+
         .main-content {
             flex: 1;
             display: flex;

@@ -3,10 +3,12 @@
             document.getElementById('view-file').style.display = tab === 'file' ? 'flex' : 'none';
             document.getElementById('view-chat').style.display = tab === 'chat' ? 'block' : 'none';
             document.getElementById('view-profile').style.display = tab === 'profile' ? 'block' : 'none';
+            document.getElementById('view-notifications').style.display = tab === 'notifications' ? 'block' : 'none';
             document.getElementById('menu-file').classList.toggle('active', tab === 'file');
             document.getElementById('menu-chat').classList.toggle('active', tab === 'chat');
             document.getElementById('menu-profile').classList.toggle('active', tab === 'profile');
-            if ((tab === 'chat' || tab === 'profile') && !isLoggedIn) {
+            document.getElementById('menu-notifications').classList.toggle('active', tab === 'notifications');
+            if ((tab === 'chat' || tab === 'profile' || tab === 'notifications') && !isLoggedIn) {
                 checkAuth();
             }
         }
@@ -63,6 +65,7 @@
                     document.getElementById('authSection').style.display = 'none';
                     document.getElementById('chatSection').style.display = 'flex';
                     document.getElementById('menu-profile').style.display = 'flex';
+                    document.getElementById('menu-notifications').style.display = 'flex';
                     
                     document.getElementById('myAccountId').innerHTML = `ID: ${currentUser.id} <button onclick="navigator.clipboard.writeText('${currentUser.id}');showToast('Đã copy ID', 'success')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding-left:10px" title="Copy">📋</button>`;
                     
@@ -73,11 +76,13 @@
 
                     initSocket();
                     loadFriends();
+                    loadFriendRequests();
                 } else {
                     isLoggedIn = false;
                     document.getElementById('authSection').style.display = 'flex';
                     document.getElementById('chatSection').style.display = 'none';
                     document.getElementById('menu-profile').style.display = 'none';
+                    document.getElementById('menu-notifications').style.display = 'none';
                 }
             } catch (e) {
                 console.error(e);
@@ -89,6 +94,8 @@
             if (socket) socket.disconnect();
             socket = null;
             document.getElementById('menu-profile').style.display = 'none';
+            document.getElementById('menu-notifications').style.display = 'none';
+            document.getElementById('notificationBadge').style.display = 'none';
             switchTab('chat');
             checkAuth();
         }
@@ -119,9 +126,8 @@
             const data = await res.json();
             if (data.error) showToast(data.error, 'error');
             else {
-                showToast('Thêm bạn bè thành công!', 'success');
+                showToast('Đã gửi lời mời kết bạn!', 'success');
                 document.getElementById('addFriendId').value = '';
-                loadFriends();
             }
         }
 
@@ -336,6 +342,70 @@
             }
         });
 
+        // --- FRIEND REQUEST LOGIC ---
+        async function loadFriendRequests() {
+            const res = await fetch('/api/friends/requests');
+            const data = await res.json();
+            const container = document.getElementById('notificationList');
+            const badge = document.getElementById('notificationBadge');
+            
+            if (data.requests && data.requests.length > 0) {
+                badge.style.display = 'block';
+                badge.innerText = data.requests.length;
+                container.innerHTML = '';
+                data.requests.forEach(req => {
+                    const displayName = req.nickname ? req.nickname : req.username;
+                    const div = document.createElement('div');
+                    div.className = 'notification-item';
+                    div.innerHTML = `
+                        <div>
+                            <div style="font-weight:600">${displayName}</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted)">ID: ${req.id}</div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn btn-primary btn-sm" onclick="acceptFriendRequest('${req.id}')">Đồng ý</button>
+                            <button class="btn btn-sm" style="background:var(--surface); border:1px solid var(--border);" onclick="declineFriendRequest('${req.id}')">Từ chối</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                badge.style.display = 'none';
+                container.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:0.9rem">Không có thông báo nào</div>';
+            }
+        }
+
+        async function acceptFriendRequest(friendId) {
+            const res = await fetch('/api/friends/accept', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({friendId})
+            });
+            const data = await res.json();
+            if (data.error) {
+                showToast(data.error, 'error');
+            } else {
+                showToast('Đã chấp nhận kết bạn!', 'success');
+                loadFriendRequests();
+                loadFriends();
+            }
+        }
+
+        async function declineFriendRequest(friendId) {
+            const res = await fetch('/api/friends/decline', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({friendId})
+            });
+            const data = await res.json();
+            if (data.error) {
+                showToast(data.error, 'error');
+            } else {
+                showToast('Đã từ chối lời mời.', 'ok');
+                loadFriendRequests();
+            }
+        }
+
         function initSocket() {
             if (socket) return;
             socket = io();
@@ -429,6 +499,18 @@
                 if (window.messageCache && window.messageCache[data.messageId]) {
                     window.messageCache[data.messageId].isDeleted = true;
                 }
+            });
+
+            // Lời mời kết bạn
+            socket.on('receive_friend_request', data => {
+                const displayName = data.nickname || data.username;
+                showToast(`Lời mời kết bạn từ ${displayName}`, 'ok');
+                loadFriendRequests(); // Update UI
+            });
+
+            socket.on('friend_request_accepted', data => {
+                showToast('Lời mời kết bạn đã được chấp nhận!', 'success');
+                loadFriends();
             });
         }
 

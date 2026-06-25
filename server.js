@@ -85,7 +85,8 @@ const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     nickname: { type: String, default: "" },
     hash: { type: String, required: true },
-    friends: [{ type: String }]
+    friends: [{ type: String }],
+    friendRequests: [{ type: String }]
 });
 const User = mongoose.model('User', userSchema);
 
@@ -320,7 +321,7 @@ app.post('/api/auth/register', async (req, res) => {
         const id = 'ID-' + Math.floor(100000 + Math.random() * 900000);
         const hash = await bcrypt.hash(password, 10);
         
-        const newUser = new User({ id, username, hash, friends: [] });
+        const newUser = new User({ id, username, hash, friends: [], friendRequests: [] });
         await newUser.save();
         
         res.json({ success: true, user: { id, username } });
@@ -387,14 +388,96 @@ app.post('/api/friends/add', async (req, res) => {
         
         if (!friend) return res.status(404).json({ error: 'Không tìm thấy ID người dùng' });
         if (user.friends.includes(friendId)) return res.status(400).json({ error: 'Đã là bạn bè' });
+        if (friend.friendRequests && friend.friendRequests.includes(user.id)) return res.status(400).json({ error: 'Đã gửi lời mời trước đó' });
+        if (user.friendRequests && user.friendRequests.includes(friendId)) return res.status(400).json({ error: 'Người này đã gửi lời mời cho bạn' });
 
-        user.friends.push(friendId);
+        if (!friend.friendRequests) friend.friendRequests = [];
+        friend.friendRequests.push(user.id);
+        
+        await friend.save();
+        
+        // Cập nhật Socket: Báo cho người nhận nếu online
+        const targetSocketId = userSockets.get(friendId);
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('receive_friend_request', { 
+                id: user.id, 
+                username: user.username, 
+                nickname: user.nickname 
+            });
+        }
+        
+        res.json({ success: true, message: 'Đã gửi lời mời kết bạn' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.post('/api/friends/accept', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { friendId } = req.body;
+        
+        const user = await User.findOne({ id: req.session.userId });
+        const friend = await User.findOne({ id: friendId });
+        
+        if (!friend) return res.status(404).json({ error: 'Không tìm thấy ID người dùng' });
+        if (!user.friendRequests || !user.friendRequests.includes(friendId)) return res.status(400).json({ error: 'Không có lời mời kết bạn từ người này' });
+
+        // Xóa khỏi danh sách request
+        user.friendRequests = user.friendRequests.filter(id => id !== friendId);
+        
+        // Thêm vào bạn bè
+        if (!user.friends.includes(friendId)) user.friends.push(friendId);
         if (!friend.friends.includes(user.id)) friend.friends.push(user.id);
         
         await user.save();
         await friend.save();
         
+        // Báo cho người gửi rằng mình đã chấp nhận (tuỳ chọn)
+        const senderSocketId = userSockets.get(friendId);
+        if (senderSocketId) {
+            io.to(senderSocketId).emit('friend_request_accepted', { id: user.id });
+        }
+        
         res.json({ success: true, friend: { id: friend.id, username: friend.username, nickname: friend.nickname } });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.post('/api/friends/decline', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { friendId } = req.body;
+        
+        const user = await User.findOne({ id: req.session.userId });
+        
+        if (!user.friendRequests || !user.friendRequests.includes(friendId)) return res.status(400).json({ error: 'Không có lời mời kết bạn từ người này' });
+
+        user.friendRequests = user.friendRequests.filter(id => id !== friendId);
+        await user.save();
+        
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.get('/api/friends/requests', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const user = await User.findOne({ id: req.session.userId });
+        if (!user || !user.friendRequests) return res.json({ requests: [] });
+
+        const requestUsers = await User.find({ id: { $in: user.friendRequests } });
+        const requestsList = requestUsers.map(u => ({
+            id: u.id,
+            username: u.username,
+            nickname: u.nickname
+        }));
+        
+        res.json({ requests: requestsList });
     } catch (err) {
         res.status(500).json({ error: 'Lỗi server' });
     }
