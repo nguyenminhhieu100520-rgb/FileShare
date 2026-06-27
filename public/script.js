@@ -1996,7 +1996,7 @@ function renderHistoryTable(data) {
                             (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
                             
         const friendObj = friendsList.find(f => f.id === h.partnerId);
-        const displayName = friendObj ? (friendObj.nickname || friendObj.username) : 'Người lạ (' + h.partnerId + ')';
+        const displayName = friendObj ? (friendObj.nickname || friendObj.username) : 'Người lạ';
         
         return `
             <tr>
