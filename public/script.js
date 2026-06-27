@@ -1895,9 +1895,10 @@
                 updateDarkModeUI(true);
             }
         });
+
 // --- FILE TRANSFER HISTORY LOGIC ---
 async function saveTransferHistory(partnerId, fileName, fileSize, role, status = 'completed') {
-    if (!isLoggedIn) return; // Ch? luu khi d� dang nh?p
+    if (!isLoggedIn) return; // Chỉ lưu khi đã đăng nhập
     try {
         await fetch('/api/transfer-history', {
             method: 'POST',
@@ -1911,10 +1912,10 @@ async function saveTransferHistory(partnerId, fileName, fileSize, role, status =
             })
         });
         if (document.getElementById('view-history').style.display === 'block') {
-            fetchTransferHistory(); // Refresh b?ng n?u dang xem
+            fetchTransferHistory(); // Refresh bảng nếu đang xem
         }
     } catch (err) {
-        console.error('L?i khi luu l?ch s?:', err);
+        console.error('Lỗi khi lưu lịch sử:', err);
     }
 }
 
@@ -1925,52 +1926,52 @@ async function fetchTransferHistory() {
         const data = await res.json();
         const tbody = document.getElementById('historyTableBody');
         if (!data.success || !data.data || data.data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 20px;">Kh�ng c� d? li?u truy?n file n�o.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 20px;">Không có dữ liệu truyền file nào.</td></tr>';
             return;
         }
         
         tbody.innerHTML = data.data.map(h => {
             const date = new Date(h.timestamp);
             const timeStr = date.toLocaleDateString('vi-VN') + ' ' + date.toLocaleTimeString('vi-VN');
-            const roleHtml = h.role === 'sender' ? '<span class="role-sender">G?i</span>' : '<span class="role-receiver">Nh?n</span>';
-            const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Ho�n th�nh</span>' : 
-                                (h.status === 'malware' ? '<span style="color:var(--red)">M� d?c</span>' : '<span style="color:var(--red)">L?i</span>');
+            const roleHtml = h.role === 'sender' ? '<span class="role-sender">Gửi</span>' : '<span class="role-receiver">Nhận</span>';
+            const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Hoàn thành</span>' : 
+                                (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
                                 
-            return \
+            return `
                 <tr>
-                    <td>\</td>
-                    <td>\</td>
-                    <td>\</td>
-                    <td class="file-name">\</td>
-                    <td>\</td>
-                    <td>\</td>
+                    <td>${timeStr}</td>
+                    <td>${roleHtml}</td>
+                    <td>${h.partnerId}</td>
+                    <td class="file-name">${h.fileName}</td>
+                    <td>${formatBytes(h.fileSize)}</td>
+                    <td>${statusHtml}</td>
                     <td>
-                        <button onclick="deleteTransferHistory('\')" class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--red); padding:4px 8px;">X�a</button>
+                        <button onclick="deleteTransferHistory('${h._id}')" class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--red); padding:4px 8px;">Xóa</button>
                     </td>
                 </tr>
-            \;
+            `;
         }).join('');
     } catch (err) {
-        console.error('L?i t?i l?ch s?:', err);
-        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding: 20px;">L?i t?i d? li?u.</td></tr>';
+        console.error('Lỗi tải lịch sử:', err);
+        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding: 20px;">Lỗi tải dữ liệu.</td></tr>';
     }
 }
 
 async function deleteTransferHistory(id) {
-    if (!confirm('B?n c� ch?c ch?n mu?n x�a b?n ghi l?ch s? n�y?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa bản ghi lịch sử này?')) return;
     try {
         const res = await fetch('/api/transfer-history/' + id, {
             method: 'DELETE'
         });
         const data = await res.json();
         if (data.success) {
-            showToast('�� x�a b?n ghi l?ch s?', 'success');
+            showToast('Đã xóa bản ghi lịch sử', 'success');
             fetchTransferHistory();
         } else {
-            showToast('L?i khi x�a', 'err');
+            showToast('Lỗi khi xóa', 'err');
         }
     } catch (err) {
-        console.error('L?i khi x�a l?ch s?:', err);
-        showToast('L?i khi x�a', 'err');
+        console.error('Lỗi khi xóa lịch sử:', err);
+        showToast('Lỗi khi xóa', 'err');
     }
-}
+}
