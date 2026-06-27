@@ -1122,6 +1122,8 @@
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' },
                         {
                             urls: 'turn:openrelay.metered.ca:80',
                             username: 'openrelayproject',
@@ -1473,7 +1475,7 @@
 
             const connTimeout = setTimeout(() => {
                 if (receiverConn && !receiverConn.open) {
-                    showStatus('receiverStatus', '❌ Lỗi mạng: Không thể kết nối (Timeout). Hãy thử lại hoặc dùng mạng khác!', 'err');
+                    showStatus('receiverStatus', '❌ Lỗi mạng (Timeout): Tường lửa (Firewall) trên Laptop của người gửi có thể đang chặn kết nối đến. Vui lòng tắt Firewall, đổi mạng hoặc thử lại!', 'err');
                     receiverConn.close();
                 }
             }, 15000);
