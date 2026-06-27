@@ -1,9 +1,18 @@
 // -- APP LOGIC (Tabs & Chat) --
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('collapsed');
+            }
+        }
+
         function switchTab(tab) {
+            document.getElementById('view-home').style.display = tab === 'home' ? 'flex' : 'none';
             document.getElementById('view-file').style.display = tab === 'file' ? 'flex' : 'none';
             document.getElementById('view-chat').style.display = tab === 'chat' ? 'block' : 'none';
             document.getElementById('view-profile').style.display = tab === 'profile' ? 'block' : 'none';
             document.getElementById('view-notifications').style.display = tab === 'notifications' ? 'block' : 'none';
+            document.getElementById('menu-home').classList.toggle('active', tab === 'home');
             document.getElementById('menu-file').classList.toggle('active', tab === 'file');
             document.getElementById('menu-chat').classList.toggle('active', tab === 'chat');
             document.getElementById('menu-profile').classList.toggle('active', tab === 'profile');

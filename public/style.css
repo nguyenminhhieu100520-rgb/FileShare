@@ -768,6 +768,10 @@
             display: flex;
             flex-direction: column;
             z-index: 10;
+            transition: width 0.3s ease;
+        }
+        .sidebar.collapsed {
+            width: 70px;
         }
         .sidebar .brand {
             padding: 0 20px 20px;
@@ -775,6 +779,15 @@
             font-weight: bold;
             border-bottom: 1px solid var(--border);
             margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .sidebar.collapsed .brand {
+            padding: 0 10px 20px;
+            justify-content: center;
+        }
+        .sidebar.collapsed .brand-text {
+            display: none;
         }
         .sidebar .menu-item {
             padding: 12px 20px;
@@ -784,6 +797,15 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .sidebar.collapsed .menu-item {
+            padding: 12px 0;
+            justify-content: center;
+        }
+        .sidebar.collapsed .menu-text {
+            display: none;
         }
         .sidebar .menu-item:hover, .sidebar .menu-item.active {
             background: var(--surface2);
