@@ -1745,7 +1745,7 @@
                         if (!scanResult.safe) {
                             // ❌ PHÁT HIỆN MÃ ĐỘC → Chặn tải xuống
                             fileInfo.status = 'malware';
-                            saveTransferHistory(receiverConn.peer, cf.name, cf.size, 'receiver', 'malware');
+                            saveTransferHistory(receiverConn.peer, cf.name, cf.expectedSize, 'receiver', 'malware');
                             const threatNames = scanResult.threats.map(t => t.message).join(' | ');
                             showStatus('receiverStatus', `🚨 PHÁT HIỆN NGUY HIỂM: ${cf.name} — ${threatNames}`, 'err');
                             playTingSound();
@@ -1755,7 +1755,7 @@
 
                         // ✅ File an toàn → Cho phép tải xuống
                         fileInfo.status = 'ok';
-                        saveTransferHistory(receiverConn.peer, cf.name, cf.size, 'receiver', 'completed');
+                        saveTransferHistory(receiverConn.peer, cf.name, cf.expectedSize, 'receiver', 'completed');
                         showStatus('receiverStatus', `✅ An toàn — Đang tải xuống: ${cf.name}`, 'ok');
                         renderRecvList();
 
