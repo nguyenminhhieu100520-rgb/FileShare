@@ -1657,6 +1657,8 @@
                         }
 
                         // ── LỚP 4: QUÉT MÃ ĐỘC ──
+                        fileInfo.status = 'scanning';
+                        renderRecvList();
                         showStatus('receiverStatus', `🔍 Đang quét mã độc cho file: ${cf.name}...`, 'warn');
                         const scanResult = await CustomMalwareScanner.scan(blob, cf.name);
                         fileInfo.scanResult = scanResult;
@@ -1741,20 +1743,12 @@
                     }
                 }
 
-                let badgeClass = f.status === 'ok' ? 'ok' : (f.status === 'malware' || f.status === 'err') ? 'err' : 'cur';
-                let badgeText = f.status === 'ok' ? '🛡️ An toàn' : f.status === 'malware' ? '🚨 Mã độc!' : f.status === 'err' ? 'Lỗi' : 'Đang nhận';
+                let badgeClass = f.status === 'ok' ? 'ok' : (f.status === 'malware' || f.status === 'err') ? 'err' : f.status === 'scanning' ? 'warn' : 'cur';
+                let badgeText = f.status === 'ok' ? 'Hoàn thành' : f.status === 'malware' ? '🚨 Mã độc!' : f.status === 'err' ? 'Lỗi' : f.status === 'scanning' ? 'Đang quét mã độc' : 'Đang nhận';
 
                 // Hiển thị chi tiết kết quả quét mã độc
                 let scanHtml = '';
-                if (f.scanResult && f.scanResult.details) {
-                    scanHtml = '<div style="width:100%;margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,0.2);font-size:0.72rem;line-height:1.6;">';
-                    f.scanResult.details.forEach(d => {
-                        const ico = d.safe ? '✅' : '❌';
-                        const clr = d.safe ? 'var(--green, #3fb950)' : 'var(--red, #f85149)';
-                        scanHtml += `<div style="color:${clr}">${ico} ${escapeHtml(d.name)}: ${escapeHtml(d.message)}</div>`;
-                    });
-                    scanHtml += '</div>';
-                }
+                // (Đã ẩn chi tiết quét theo yêu cầu để giao diện gọn hơn)
 
                 el.innerHTML = `
             ${iconHtml}
