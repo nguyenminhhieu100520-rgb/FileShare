@@ -251,9 +251,23 @@
                         replyHtml = `<div class="msg-reply-block">${origText}</div>`;
                     }
 
+                    let renderedContent = escapeHtml(m.content);
+                    const inviteMatch = m.content.match(/^\[FILE_INVITE:(.+)\]$/);
+                    if (inviteMatch) {
+                        const targetPeer = escapeHtml(inviteMatch[1]);
+                        renderedContent = `
+                            <div style="background:var(--surface2); padding:10px; border-radius:8px; border:1px solid var(--border); margin-top:5px; text-align:center;">
+                                <div style="font-size:0.9rem; margin-bottom:8px; color:var(--text-muted)">Mình muốn gửi file cho bạn!</div>
+                                <button class="btn btn-primary btn-sm" onclick="acceptFileInvite('${targetPeer}')" style="width:100%; font-size:0.85rem;">
+                                    📁 Nhận File (ID: ${targetPeer})
+                                </button>
+                            </div>
+                        `;
+                    }
+
                     div.innerHTML = `
                         ${replyHtml}
-                        <div>${escapeHtml(m.content)}</div>
+                        <div>${renderedContent}</div>
                         <div class="msg-meta">${timeStr} ${statusHtml}</div>
                     `;
                 }
@@ -323,6 +337,37 @@
             cancelReply();
             document.getElementById('emojiPicker').style.display = 'none';
         }
+
+        function sendInviteLink() {
+            const peerId = document.getElementById('myPeerId').innerText;
+            if (!peerId || peerId === 'Đang lấy ID...') {
+                showToast('Chưa lấy được ID truyền file, vui lòng đợi!', 'warn');
+                return;
+            }
+            if (!activeFriendId || !socket) return;
+            
+            const inviteMsg = `[FILE_INVITE:${peerId}]`;
+            socket.emit('send_message', { 
+                targetId: activeFriendId, 
+                content: inviteMsg,
+                replyTo: replyingToMessageId 
+            });
+            cancelReply();
+        }
+
+        window.acceptFileInvite = function(peerId) {
+            switchTab('file');
+            const targetInput = document.getElementById('targetPeerId');
+            if (targetInput) {
+                targetInput.value = peerId;
+                targetInput.focus();
+                
+                const banner = document.getElementById('receiverBanner');
+                if (banner) {
+                    banner.style.display = 'flex';
+                }
+            }
+        };
 
         // --- EMOJI PICKER LOGIC ---
         const EMOJIS = ['😀','😂','🥰','😎','😭','🥺','👍','🙏','❤️','🔥','🎉','✨'];
