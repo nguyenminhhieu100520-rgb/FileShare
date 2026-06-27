@@ -1346,3 +1346,37 @@ body.dark-mode .msg-reply-block {
     color: var(--text);
     font-weight: 600;
 }
+
+/* History Table Filter */
+.filter-header {
+    position: relative;
+    cursor: pointer;
+}
+.filter-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 100;
+    min-width: 100px;
+    overflow: hidden;
+}
+.filter-header:hover .filter-menu {
+    display: block;
+}
+.filter-menu div {
+    padding: 10px 15px;
+    font-weight: 500;
+    color: var(--text);
+    text-align: center;
+    transition: background 0.2s;
+}
+.filter-menu div:hover {
+    background: var(--surface2);
+    color: var(--blue);
+}

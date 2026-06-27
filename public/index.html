@@ -393,7 +393,14 @@
                         <thead>
                             <tr>
                                 <th>Thời gian</th>
-                                <th>Vai trò</th>
+                                <th class="filter-header">
+                                    Vai trò <span style="font-size: 0.8rem; color: var(--text-muted);">▼</span>
+                                    <div class="filter-menu">
+                                        <div onclick="filterHistory('all')">Tất cả</div>
+                                        <div onclick="filterHistory('sender')">Gửi</div>
+                                        <div onclick="filterHistory('receiver')">Nhận</div>
+                                    </div>
+                                </th>
                                 <th>Đối tác</th>
                                 <th>Tên File</th>
                                 <th>Dung lượng</th>

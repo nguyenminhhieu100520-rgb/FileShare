@@ -1949,42 +1949,64 @@ async function saveTransferHistory(partnerId, fileName, fileSize, role, status =
     }
 }
 
+let allHistoryData = [];
+let currentHistoryFilter = 'all';
+
 async function fetchTransferHistory() {
     if (!isLoggedIn) return;
     try {
         const res = await fetch('/api/transfer-history');
         const data = await res.json();
-        const tbody = document.getElementById('historyTableBody');
-        if (!data.success || !data.data || data.data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 20px;">Không có dữ liệu truyền file nào.</td></tr>';
-            return;
-        }
         
-        tbody.innerHTML = data.data.map(h => {
-            const date = new Date(h.timestamp);
-            const timeStr = date.toLocaleDateString('vi-VN') + ' ' + date.toLocaleTimeString('vi-VN');
-            const roleHtml = h.role === 'sender' ? '<span class="role-sender">Gửi</span>' : '<span class="role-receiver">Nhận</span>';
-            const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Hoàn thành</span>' : 
-                                (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
-                                
-            return `
-                <tr>
-                    <td>${timeStr}</td>
-                    <td>${roleHtml}</td>
-                    <td>${h.partnerId}</td>
-                    <td class="file-name">${h.fileName}</td>
-                    <td>${formatBytes(h.fileSize)}</td>
-                    <td>${statusHtml}</td>
-                    <td>
-                        <button onclick="deleteTransferHistory('${h._id}')" class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--red); padding:4px 8px;">Xóa</button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        if (data.success && data.data) {
+            allHistoryData = data.data;
+        } else {
+            allHistoryData = [];
+        }
+        filterHistory(currentHistoryFilter);
     } catch (err) {
         console.error('Lỗi tải lịch sử:', err);
         document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding: 20px;">Lỗi tải dữ liệu.</td></tr>';
     }
+}
+
+function filterHistory(role) {
+    currentHistoryFilter = role;
+    let filteredData = allHistoryData;
+    if (role !== 'all') {
+        filteredData = allHistoryData.filter(h => h.role === role);
+    }
+    renderHistoryTable(filteredData);
+}
+
+function renderHistoryTable(data) {
+    const tbody = document.getElementById('historyTableBody');
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 20px;">Không có dữ liệu truyền file nào.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = data.map(h => {
+        const date = new Date(h.timestamp);
+        const timeStr = date.toLocaleDateString('vi-VN') + ' ' + date.toLocaleTimeString('vi-VN');
+        const roleHtml = h.role === 'sender' ? '<span class="role-sender">Gửi</span>' : '<span class="role-receiver">Nhận</span>';
+        const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Hoàn thành</span>' : 
+                            (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
+                            
+        return `
+            <tr>
+                <td>${timeStr}</td>
+                <td>${roleHtml}</td>
+                <td>${h.partnerId}</td>
+                <td class="file-name">${h.fileName}</td>
+                <td>${formatBytes(h.fileSize)}</td>
+                <td>${statusHtml}</td>
+                <td>
+                    <button onclick="deleteTransferHistory('${h._id}')" class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--red); padding:4px 8px;">Xóa</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 async function deleteTransferHistory(id) {
