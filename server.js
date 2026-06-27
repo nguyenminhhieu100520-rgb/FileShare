@@ -102,6 +102,18 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
+const transferHistorySchema = new mongoose.Schema({
+    userId: { type: String, required: true },
+    partnerId: { type: String, required: true },
+    partnerName: { type: String },
+    role: { type: String, enum: ['sender', 'receiver'], required: true },
+    fileName: { type: String, required: true },
+    fileSize: { type: Number, required: true },
+    timestamp: { type: Number, required: true },
+    status: { type: String, enum: ['completed', 'failed', 'cancelled'], default: 'completed' }
+});
+const TransferHistory = mongoose.model('TransferHistory', transferHistorySchema);
+
 // Clean old messages (older than 3 days)
 async function cleanOldMessages() {
     try {
@@ -500,6 +512,67 @@ app.get('/api/friends', async (req, res) => {
         res.status(500).json({ error: 'Lỗi server' });
     }
 });
+
+// --- Lịch sử truyền file ---
+app.post('/api/transfer-history', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const { partnerId, partnerName, role, fileName, fileSize, status } = req.body;
+        
+        const history = new TransferHistory({
+            userId: req.session.userId,
+            partnerId,
+            partnerName: partnerName || '',
+            role,
+            fileName,
+            fileSize,
+            timestamp: Date.now(),
+            status: status || 'completed'
+        });
+        
+        await history.save();
+        res.json({ success: true, data: history });
+    } catch (err) {
+        console.error('Lỗi khi lưu lịch sử:', err);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.get('/api/transfer-history', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        
+        // Lấy 50 bản ghi gần nhất
+        const histories = await TransferHistory.find({ userId: req.session.userId })
+            .sort({ timestamp: -1 })
+            .limit(50);
+            
+        res.json({ success: true, data: histories });
+    } catch (err) {
+        console.error('Lỗi khi lấy lịch sử:', err);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+app.delete('/api/transfer-history/:id', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: 'Chưa đăng nhập' });
+        const historyId = req.params.id;
+        
+        const result = await TransferHistory.deleteOne({ _id: historyId, userId: req.session.userId });
+        
+        if (result.deletedCount > 0) {
+            res.json({ success: true });
+        } else {
+            res.status(404).json({ error: 'Không tìm thấy bản ghi' });
+        }
+    } catch (err) {
+        console.error('Lỗi khi xóa lịch sử:', err);
+        res.status(500).json({ error: 'Lỗi server' });
+    }
+});
+
+// ── QUẢN LÝ ẢNH ĐẠI DIỆN VÀ FILE UPLOAD KHÁC (NẾU CÓ TRONG TƯƠNG LAI) ──────────
 
 app.get('/api/messages/:friendId', async (req, res) => {
     try {

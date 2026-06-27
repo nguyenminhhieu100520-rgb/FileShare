@@ -12,13 +12,18 @@
             document.getElementById('view-chat').style.display = tab === 'chat' ? 'block' : 'none';
             document.getElementById('view-profile').style.display = tab === 'profile' ? 'block' : 'none';
             document.getElementById('view-notifications').style.display = tab === 'notifications' ? 'block' : 'none';
+            document.getElementById('view-history').style.display = tab === 'history' ? 'block' : 'none';
             document.getElementById('menu-home').classList.toggle('active', tab === 'home');
             document.getElementById('menu-file').classList.toggle('active', tab === 'file');
             document.getElementById('menu-chat').classList.toggle('active', tab === 'chat');
             document.getElementById('menu-profile').classList.toggle('active', tab === 'profile');
             document.getElementById('menu-notifications').classList.toggle('active', tab === 'notifications');
-            if ((tab === 'chat' || tab === 'profile' || tab === 'notifications') && !isLoggedIn) {
+            document.getElementById('menu-history').classList.toggle('active', tab === 'history');
+            if ((tab === 'chat' || tab === 'profile' || tab === 'notifications' || tab === 'history') && !isLoggedIn) {
                 checkAuth();
+            }
+            if (tab === 'history' && isLoggedIn) {
+                fetchTransferHistory();
             }
         }
 
@@ -75,6 +80,7 @@
                     document.getElementById('chatSection').style.display = 'flex';
                     document.getElementById('menu-profile').style.display = 'flex';
                     document.getElementById('menu-notifications').style.display = 'flex';
+                    document.getElementById('menu-history').style.display = 'flex';
                     
                     document.getElementById('myAccountId').innerHTML = `ID: ${currentUser.id} <button onclick="navigator.clipboard.writeText('${currentUser.id}');showToast('Đã copy ID', 'success')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding-left:10px" title="Copy">📋</button>`;
                     
@@ -92,6 +98,7 @@
                     document.getElementById('chatSection').style.display = 'none';
                     document.getElementById('menu-profile').style.display = 'none';
                     document.getElementById('menu-notifications').style.display = 'none';
+                    document.getElementById('menu-history').style.display = 'none';
                 }
             } catch (e) {
                 console.error(e);
@@ -104,6 +111,7 @@
             socket = null;
             document.getElementById('menu-profile').style.display = 'none';
             document.getElementById('menu-notifications').style.display = 'none';
+            document.getElementById('menu-history').style.display = 'none';
             document.getElementById('notificationBadge').style.display = 'none';
             switchTab('chat');
             checkAuth();
@@ -1359,6 +1367,7 @@
                     }, pin, resumeOff);
 
                     qf.status = 'done';
+                    saveTransferHistory(conn.peer, qf.name, qf.size, 'sender', 'completed');
                     bytesSentTotal += qf.size;
                 } catch (err) {
                     if (err.message === 'PAUSED') {
@@ -1369,6 +1378,7 @@
                         return; // Thoát vòng lặp, giữ nguyên hàng đợi
                     }
                     qf.status = 'error';
+                    saveTransferHistory(conn.peer, qf.name, qf.size, 'sender', 'failed');
                     showStatus('senderStatus', `❌ Gửi file thất bại: ${qf.name}`, 'err');
                 }
                 renderQueue();
@@ -1729,6 +1739,7 @@
                         if (!scanResult.safe) {
                             // ❌ PHÁT HIỆN MÃ ĐỘC → Chặn tải xuống
                             fileInfo.status = 'malware';
+                            saveTransferHistory(receiverConn.peer, cf.name, cf.size, 'receiver', 'malware');
                             const threatNames = scanResult.threats.map(t => t.message).join(' | ');
                             showStatus('receiverStatus', `🚨 PHÁT HIỆN NGUY HIỂM: ${cf.name} — ${threatNames}`, 'err');
                             playTingSound();
@@ -1738,6 +1749,7 @@
 
                         // ✅ File an toàn → Cho phép tải xuống
                         fileInfo.status = 'ok';
+                        saveTransferHistory(receiverConn.peer, cf.name, cf.size, 'receiver', 'completed');
                         showStatus('receiverStatus', `✅ An toàn — Đang tải xuống: ${cf.name}`, 'ok');
                         renderRecvList();
 
@@ -1883,3 +1895,82 @@
                 updateDarkModeUI(true);
             }
         });
+// --- FILE TRANSFER HISTORY LOGIC ---
+async function saveTransferHistory(partnerId, fileName, fileSize, role, status = 'completed') {
+    if (!isLoggedIn) return; // Ch? luu khi d� dang nh?p
+    try {
+        await fetch('/api/transfer-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                partnerId,
+                role,
+                fileName,
+                fileSize,
+                status
+            })
+        });
+        if (document.getElementById('view-history').style.display === 'block') {
+            fetchTransferHistory(); // Refresh b?ng n?u dang xem
+        }
+    } catch (err) {
+        console.error('L?i khi luu l?ch s?:', err);
+    }
+}
+
+async function fetchTransferHistory() {
+    if (!isLoggedIn) return;
+    try {
+        const res = await fetch('/api/transfer-history');
+        const data = await res.json();
+        const tbody = document.getElementById('historyTableBody');
+        if (!data.success || !data.data || data.data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding: 20px;">Kh�ng c� d? li?u truy?n file n�o.</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.data.map(h => {
+            const date = new Date(h.timestamp);
+            const timeStr = date.toLocaleDateString('vi-VN') + ' ' + date.toLocaleTimeString('vi-VN');
+            const roleHtml = h.role === 'sender' ? '<span class="role-sender">G?i</span>' : '<span class="role-receiver">Nh?n</span>';
+            const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Ho�n th�nh</span>' : 
+                                (h.status === 'malware' ? '<span style="color:var(--red)">M� d?c</span>' : '<span style="color:var(--red)">L?i</span>');
+                                
+            return \
+                <tr>
+                    <td>\</td>
+                    <td>\</td>
+                    <td>\</td>
+                    <td class="file-name">\</td>
+                    <td>\</td>
+                    <td>\</td>
+                    <td>
+                        <button onclick="deleteTransferHistory('\')" class="btn btn-sm" style="background:none; border:1px solid var(--border); color:var(--red); padding:4px 8px;">X�a</button>
+                    </td>
+                </tr>
+            \;
+        }).join('');
+    } catch (err) {
+        console.error('L?i t?i l?ch s?:', err);
+        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding: 20px;">L?i t?i d? li?u.</td></tr>';
+    }
+}
+
+async function deleteTransferHistory(id) {
+    if (!confirm('B?n c� ch?c ch?n mu?n x�a b?n ghi l?ch s? n�y?')) return;
+    try {
+        const res = await fetch('/api/transfer-history/' + id, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('�� x�a b?n ghi l?ch s?', 'success');
+            fetchTransferHistory();
+        } else {
+            showToast('L?i khi x�a', 'err');
+        }
+    } catch (err) {
+        console.error('L?i khi x�a l?ch s?:', err);
+        showToast('L?i khi x�a', 'err');
+    }
+}

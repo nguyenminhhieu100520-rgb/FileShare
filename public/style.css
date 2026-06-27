@@ -1318,3 +1318,31 @@ body.dark-mode .msg-reply-block {
 .msg.deleted .msg-reply-block {
     display: none;
 }
+/* --- HISTORY TABLE --- */
+.history-table th, .history-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    font-size: 0.9rem;
+}
+.history-table th {
+    background-color: var(--surface2);
+    font-weight: 600;
+    color: var(--text);
+}
+.history-table tr:hover {
+    background-color: rgba(28, 100, 242, 0.03);
+}
+.history-table .role-sender {
+    color: var(--blue);
+    font-weight: 600;
+}
+.history-table .role-receiver {
+    color: var(--green);
+    font-weight: 600;
+}
+.history-table .file-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    font-weight: 600;
+}
