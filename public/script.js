@@ -1978,6 +1978,16 @@ function filterHistory(role) {
     if (role !== 'all') {
         filteredData = allHistoryData.filter(h => h.role === role);
     }
+    
+    document.querySelectorAll('.filter-menu div').forEach(el => {
+        el.style.fontWeight = '500';
+        el.style.color = 'var(--text)';
+        if (el.getAttribute('onclick') === `filterHistory('${role}')`) {
+            el.style.fontWeight = '700';
+            el.style.color = 'var(--blue)';
+        }
+    });
+
     renderHistoryTable(filteredData);
 }
 
@@ -1995,8 +2005,7 @@ function renderHistoryTable(data) {
         const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Hoàn thành</span>' : 
                             (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
                             
-        const friendObj = friendsList.find(f => f.id === h.partnerId);
-        const displayName = friendObj ? (friendObj.nickname || friendObj.username) : 'Người lạ';
+        const displayName = h.partnerName || 'Người lạ';
         
         return `
             <tr>

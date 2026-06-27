@@ -547,7 +547,15 @@ app.get('/api/transfer-history', async (req, res) => {
             .sort({ timestamp: -1 })
             .limit(50);
             
-        res.json({ success: true, data: histories });
+        const enrichedHistories = await Promise.all(histories.map(async h => {
+            const partner = await User.findOne({ id: h.partnerId });
+            return {
+                ...h._doc,
+                partnerName: partner ? (partner.nickname || partner.username) : 'Người lạ'
+            };
+        }));
+            
+        res.json({ success: true, data: enrichedHistories });
     } catch (err) {
         console.error('Lỗi khi lấy lịch sử:', err);
         res.status(500).json({ error: 'Lỗi server' });
