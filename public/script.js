@@ -93,6 +93,9 @@
                     initSocket();
                     loadFriends();
                     loadFriendRequests();
+                    
+                    if (peer) peer.destroy();
+                    initPeer();
                 } else {
                     isLoggedIn = false;
                     document.getElementById('authSection').style.display = 'flex';
@@ -110,12 +113,19 @@
             await fetch('/api/auth/logout', { method: 'POST' });
             if (socket) socket.disconnect();
             socket = null;
+            document.getElementById('chatSection').style.display = 'none';
             document.getElementById('menu-profile').style.display = 'none';
             document.getElementById('menu-notifications').style.display = 'none';
             document.getElementById('menu-history').style.display = 'none';
             document.getElementById('notificationBadge').style.display = 'none';
-            switchTab('chat');
+            switchTab('home');
+            
+            if (peer) peer.destroy();
+            peer = null;
+            isLoggedIn = false;
+            currentUser = null;
             checkAuth();
+            initPeer();
         }
 
         async function updateProfile() {
@@ -1214,7 +1224,7 @@
                 }
             };
 
-            const customId = generateRandomId(10);
+            const customId = isLoggedIn ? currentUser.id : generateRandomId(10);
             peer = new Peer(customId, opts);
 
             peer.on('open', id => {
