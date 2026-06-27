@@ -31,6 +31,7 @@
         let isLoggedIn = false;
         let currentUser = null;
         let activeFriendId = null;
+        let friendsList = [];
         let socket = null;
 
         function toggleAuthMode() {
@@ -153,6 +154,7 @@
             const data = await res.json();
             const container = document.getElementById('friendsListContainer');
             container.innerHTML = '';
+            friendsList = data.friends || [];
             
             data.friends.forEach(f => {
                 const displayName = f.nickname ? f.nickname : f.username;
@@ -1993,11 +1995,14 @@ function renderHistoryTable(data) {
         const statusHtml = h.status === 'completed' ? '<span style="color:var(--green)">Hoàn thành</span>' : 
                             (h.status === 'malware' ? '<span style="color:var(--red)">Mã độc</span>' : '<span style="color:var(--red)">Lỗi</span>');
                             
+        const friendObj = friendsList.find(f => f.id === h.partnerId);
+        const displayName = friendObj ? (friendObj.nickname || friendObj.username) : 'Người lạ (' + h.partnerId + ')';
+        
         return `
             <tr>
                 <td>${timeStr}</td>
                 <td>${roleHtml}</td>
-                <td>${h.partnerId}</td>
+                <td>${displayName}</td>
                 <td class="file-name">${h.fileName}</td>
                 <td>${formatBytes(h.fileSize)}</td>
                 <td>${statusHtml}</td>
