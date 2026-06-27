@@ -1342,7 +1342,9 @@
                 bytesSentTotal += fileQueue[i].size;
             }
 
+            $('senderStopBtn').style.display = 'inline-block';
             for (let i = startFileIndex; i < fileQueue.length; i++) {
+                if (!isSending) break;
                 const qf = fileQueue[i];
                 qf.status = 'sending';
                 renderQueue();
@@ -1394,6 +1396,7 @@
                 `Tổng: ${formatBytes(totalBytes)}`, true
             );
             showStatus('senderStatus', `✅ Gửi xong tất cả ${fileQueue.length} file!`, 'ok');
+            $('senderStopBtn').style.display = 'none';
             renderQueue();
         }
 
@@ -1602,7 +1605,8 @@
                         recvSpeedMeter.bytes = 0;
                         recvSpeedMeter.windowStart = Date.now();
                         recvSpeedMeter.lastKBps = 0;
-                        showStatus('receiverStatus', `📦 Sẽ nhận ${msg.totalFiles} file`, 'ok');
+                        showStatus('receiverStatus', `🤝 Chấp nhận mã PIN. Bắt đầu nhận ${msg.totalFiles} file...`, 'ok');
+                        $('receiverStopBtn').style.display = 'inline-block';
                         receiverConn.send({ type: 'client_ready' });
                     }
                 }
@@ -1670,7 +1674,7 @@
                             }
                         }
 
-                        targetFile.chunks.push(chunkData);
+                        targetFile.chunks[chunkIdx] = chunkData;
                         targetFile.receivedBytes += chunkData.byteLength;
                         recvTotalBytes += chunkData.byteLength;
 
@@ -1783,6 +1787,7 @@
                         msg2 = `✅ Đã nhận, quét an toàn và tải xuống tất cả ${ok} file!`;
                     }
                     showStatus('receiverStatus', msg2, totalIssues > 0 ? (malware > 0 ? 'err' : 'warn') : 'ok');
+                    $('receiverStopBtn').style.display = 'none';
                     playTingSound();
                 }
             });
@@ -1895,6 +1900,31 @@
                 updateDarkModeUI(true);
             }
         });
+
+        // ── STOP BUTTONS LOGIC ───────────────────────────────────────────
+        if ($('senderStopBtn')) {
+            $('senderStopBtn').addEventListener('click', () => {
+                if (peer) {
+                    for (let conns of Object.values(peer.connections)) {
+                        conns.forEach(c => c.close());
+                    }
+                }
+                isSending = false;
+                $('senderStopBtn').style.display = 'none';
+                showStatus('senderStatus', '🛑 Đã dừng truyền file.', 'err');
+            });
+        }
+        if ($('receiverStopBtn')) {
+            $('receiverStopBtn').addEventListener('click', () => {
+                if (peer) {
+                    for (let conns of Object.values(peer.connections)) {
+                        conns.forEach(c => c.close());
+                    }
+                }
+                $('receiverStopBtn').style.display = 'none';
+                showStatus('receiverStatus', '🛑 Đã dừng nhận file.', 'err');
+            });
+        }
 
 // --- FILE TRANSFER HISTORY LOGIC ---
 async function saveTransferHistory(partnerId, fileName, fileSize, role, status = 'completed') {
